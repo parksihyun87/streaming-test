@@ -1,0 +1,24 @@
+<!DOCTYPE html>
+<html>
+  <body>
+    <h2>WebSocket Client</h2>
+    <button onclick="send()">Send</button>
+
+    <script>
+      const ws = new WebSocket("ws://localhost:8080");//브라우저 열면 연결
+
+      ws.onopen = () => {// 연결시 로그 메세지
+        console.log("Connected to server");
+      };
+
+      ws.onmessage = (event) => {// 메세지 왔을때.
+        console.log("Message from server:", event.data);
+      };
+
+      function send() {
+        const message = { text: "Hello from client" };
+        ws.send(JSON.stringify(message));
+      }
+    </script>
+  </body>
+</html>

@@ -1,0 +1,81 @@
+<!DOCTYPE html>
+<html>
+<head>
+  <title>WebRTC 1:1 예제</title>
+</head>
+<body>
+  <h2>🔴 로컬 (내 화면)</h2>
+  <video id="localVideo" autoplay playsinline muted></video>
+
+  <h2>🟢 상대 화면</h2>
+  <video id="remoteVideo" autoplay playsinline></video>
+
+  <script>
+    let localStream;
+    const pc = new RTCPeerConnection();
+    const localVideo = document.getElementById("localVideo");
+    const remoteVideo = document.getElementById("remoteVideo");
+    const isInitiator = window.location.hash === "#1";
+    let ws;
+
+    // 1. 로컬 미디어 가져오기 → rtcpeerconnection에 트랙 추가 → 그 후 WebSocket 연결// 비디오 오디오를 webrtc pc에 등록
+    navigator.mediaDevices.getUserMedia({ video: true, audio: true })
+      .then(stream => {
+        localStream = stream;
+        localVideo.srcObject = stream;
+        stream.getTracks().forEach(track => pc.addTrack(track, stream));
+
+        startWebSocket(); // 반드시 이후에 실행!
+      });
+
+    // 2. 상대 트랙 수신 
+    pc.ontrack = (event) => {
+      remoteVideo.srcObject = event.streams[0];
+    };
+
+    // 3. 연결 상태 로그// 웹소케팅으로 시그널링 메세지 교환으로 ice정보 연동후 p2p 준비
+    pc.onconnectionstatechange = () => {
+      console.log("💡 연결 상태:", pc.connectionState);
+    };
+
+    function startWebSocket() {
+      ws = new WebSocket("ws://localhost:8080");
+
+      ws.onopen = async () => {
+        if (isInitiator) {
+          const offer = await pc.createOffer();
+          await pc.setLocalDescription(offer);
+          ws.send(JSON.stringify(offer));
+        }
+      };
+
+      ws.onmessage = async (msg) => {
+        const data = JSON.parse(msg.data);
+
+        if (data.type === "offer") {
+          await pc.setRemoteDescription(new RTCSessionDescription(data));
+          const answer = await pc.createAnswer();
+          await pc.setLocalDescription(answer);
+          ws.send(JSON.stringify(pc.localDescription));
+
+        } else if (data.type === "answer") {
+          await pc.setRemoteDescription(new RTCSessionDescription(data));
+
+        } else if (data.type === "candidate") {
+          try {
+            await pc.addIceCandidate(new RTCIceCandidate(data.candidate));
+          } catch (e) {
+            console.error("❌ ICE 추가 오류:", e);
+          }
+        }
+      };
+        //ice후보지 네트워크 정보 전송
+      pc.onicecandidate = (event) => {
+        if (event.candidate) {
+          ws.send(JSON.stringify({ type: "candidate", candidate: event.candidate }));
+        }
+      };
+    }
+  </script>
+</body>
+</html>
