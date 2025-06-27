@@ -39,7 +39,8 @@
     };
 
     function startWebSocket() {
-      ws = new WebSocket("ws://localhost:8080");
+      // ws = new WebSocket("ws://localhost:8080");
+      ws = new WebSocket("ws://192.168.0.37:8080");
 
       ws.onopen = async () => {
         if (isInitiator) {
