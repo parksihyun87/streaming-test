@@ -1,0 +1,20 @@
+.App {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  padding: 20px;
+  font-family: Arial, sans-serif;
+  background-color: #f0f2f5;
+  min-height: 100vh;
+}
+
+.game-area {
+  position: relative; /* 맵과 캐릭터의 absolute 포지셔닝을 위해 필요 */
+  width: 800px; /* 맵 데이터의 width와 일치 */
+  height: 600px; /* 맵 데이터의 height와 일치 */
+  border: 2px solid #333;
+  background-color: #eee; /* 맵 배경이 로드되지 않았을 때 */
+  overflow: hidden; /* 캐릭터가 맵 밖으로 나가지 않게 */
+  box-shadow: 0 4px 8px rgba(0,0,0,0.1);
+  margin-bottom: 20px;
+}

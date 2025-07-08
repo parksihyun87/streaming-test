@@ -1,147 +1,399 @@
 <!DOCTYPE html>
 <html lang="ko">
 <head>
-  <meta charset="UTF-8" />
+  <meta charset="UTF-8">
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
-  <title>👁️ 수신자 화면</title>
+  <title>수신자 화면</title>
   <style>
     body {
-      font-family: Arial, sans-serif;
-      max-width: 800px;
-      margin: 0 auto;
+      font-family: 'Arial', sans-serif;
+      background: linear-gradient(135deg, #f0f4f8 0%, #d9e2ec 100%);
+      margin: 0;
       padding: 20px;
+      display: flex;
+      flex-direction: column;
+      align-items: center;
+      min-height: 100vh;
+      color: #333;
     }
-    
-    video {
+
+    h1 {
+      color: #2c3e50;
+      text-align: center;
+      margin-bottom: 25px;
+      text-shadow: 1px 1px 2px rgba(0,0,0,0.1);
+    }
+
+    .section-container {
+      background-color: #ffffff;
+      border-radius: 12px;
+      box-shadow: 0 6px 20px rgba(0, 0, 0, 0.1);
+      padding: 25px;
+      margin-bottom: 25px;
       width: 100%;
-      max-width: 640px;
-      height: auto;
-      border: 2px solid #333;
-      border-radius: 8px;
+      max-width: 800px;
+      box-sizing: border-box;
+    }
+
+    .section-container h3 {
+      color: #34495e;
+      border-bottom: 2px solid #ecf0f1;
+      padding-bottom: 12px;
+      margin-top: 0;
       margin-bottom: 20px;
-      background-color: #000;
+      text-align: center;
     }
-    
-    #chatContainer {
-      border: 1px solid #ddd;
+
+    video {
+      max-width: 800px;
+      width: 100%;
+      height: auto;
+      border: 4px solid #2c3e50;
+      border-radius: 12px;
+      box-shadow: 0 8px 25px rgba(0,0,0,0.25);
+      background: #000;
+      margin-bottom: 25px;
+      display: block; /* Ensures video is a block element for margin auto */
+    }
+
+    .input-group {
+      display: flex;
+      gap: 10px;
+      margin-bottom: 15px;
+      align-items: center;
+      flex-wrap: wrap;
+    }
+
+    .input-group label {
+      font-weight: bold;
+      color: #555;
+      white-space: nowrap;
+    }
+
+    .input-group input[type="text"], .input-group input[type="number"] {
+      flex: 1;
+      padding: 10px 15px;
+      border: 1px solid #ced4da;
       border-radius: 8px;
-      padding: 15px;
-      background-color: #f9f9f9;
+      font-size: 16px;
+      min-width: 120px;
     }
-    
+
+    .input-group button {
+      padding: 10px 20px;
+      border: none;
+      border-radius: 8px;
+      background: #007bff;
+      color: white;
+      cursor: pointer;
+      font-size: 16px;
+      transition: background 0.3s ease, transform 0.2s ease;
+    }
+
+    .input-group button:hover {
+      background: #0056b3;
+      transform: translateY(-1px);
+    }
+
+    .input-group button:disabled {
+      background: #cccccc;
+      cursor: not-allowed;
+    }
+
+    .action-buttons {
+      display: flex;
+      gap: 15px;
+      margin: 20px 0;
+      flex-wrap: wrap;
+      justify-content: center;
+    }
+
+    .like-btn, .star-balloon-btn {
+      color: white;
+      border: none;
+      padding: 12px 24px;
+      border-radius: 30px;
+      font-size: 17px;
+      cursor: pointer;
+      transition: all 0.3s cubic-bezier(0.25, 0.8, 0.25, 1);
+      box-shadow: 0 4px 15px rgba(0,0,0,0.1);
+      display: flex;
+      align-items: center;
+      gap: 8px;
+      font-weight: bold;
+    }
+
+    .like-btn {
+      background: linear-gradient(45deg, #ff6b6b, #ff5252);
+    }
+    .like-btn:hover {
+      transform: translateY(-3px) scale(1.02);
+      box-shadow: 0 6px 20px rgba(255, 107, 107, 0.4);
+    }
+
+    .star-balloon-btn {
+      background: linear-gradient(45deg, #ffd700, #ffb300);
+    }
+    .star-balloon-btn:hover {
+      transform: translateY(-3px) scale(1.02);
+      box-shadow: 0 6px 20px rgba(255, 215, 0, 0.4);
+    }
+    .star-balloon-btn:disabled, .like-btn:disabled {
+      background: #cccccc;
+      cursor: not-allowed;
+      box-shadow: none;
+      transform: none;
+    }
+
     #chatLog {
-      height: 200px;
+      background: #f8f9fa;
+      border-radius: 10px;
+      padding: 15px;
+      height: 250px;
       overflow-y: auto;
-      border: 1px solid #ccc;
-      padding: 10px;
-      background-color: white;
-      border-radius: 4px;
-      margin-bottom: 10px;
-      font-size: 14px;
+      color: #333;
+      font-size: 15px;
+      line-height: 1.6;
+      border: 1px solid #e0e6ed;
     }
-    
+
+    .chat-message {
+      margin-bottom: 8px;
+      padding: 8px 12px;
+      border-radius: 8px;
+      background: #e9ecef;
+      word-wrap: break-word;
+    }
+    .chat-message strong {
+        color: #007bff;
+    }
+
+    .system-message {
+      color: #6c757d;
+      font-style: italic;
+      text-align: center;
+      margin: 10px 0;
+      font-size: 14px;
+      padding: 5px;
+      border-radius: 5px;
+      background: #e2e6ea;
+    }
+    .effect-message {
+      background: linear-gradient(90deg, #ffedd5, #fef3c7);
+      color: #8a6d3b;
+      padding: 12px 18px;
+      border-radius: 10px;
+      margin: 8px 0;
+      font-weight: bold;
+      border: 2px solid #fce891;
+      box-shadow: 0 4px 15px rgba(255, 215, 0, 0.5);
+      animation: sparkle 1s ease-in-out;
+      text-align: center;
+    }
+
+    @keyframes sparkle {
+      0% { transform: scale(0.8); opacity: 0; }
+      50% { transform: scale(1.1); opacity: 1; }
+      100% { transform: scale(1); opacity: 1; }
+    }
+
     #chatInputContainer {
       display: flex;
       gap: 10px;
+      margin-top: 15px;
     }
-    
+
     #chatInput {
       flex: 1;
-      padding: 8px;
-      border: 1px solid #ccc;
-      border-radius: 4px;
-      font-size: 14px;
+      padding: 10px 15px;
+      border: 1px solid #ced4da;
+      border-radius: 8px;
+      background: #f8f9fa;
+      color: #333;
+      font-size: 16px;
     }
-    
+
     #sendBtn {
-      padding: 8px 16px;
-      background-color: #28a745;
-      color: white;
+      padding: 10px 20px;
       border: none;
-      border-radius: 4px;
+      border-radius: 8px;
+      background: #2196F3;
+      color: white;
       cursor: pointer;
-      font-size: 14px;
+      font-size: 16px;
+      transition: background 0.3s ease;
     }
-    
     #sendBtn:hover {
-      background-color: #218838;
+      background: #1976D2;
     }
-    
     #sendBtn:disabled {
-      background-color: #6c757d;
+      background: #cccccc;
       cursor: not-allowed;
     }
-    
+
     #status {
-      margin-top: 10px;
-      padding: 10px;
-      border-radius: 4px;
+      margin-top: 25px;
+      padding: 15px;
+      border-radius: 10px;
       font-weight: bold;
+      text-align: center;
+      box-shadow: 0 2px 10px rgba(0,0,0,0.1);
+      transition: background-color 0.3s ease, color 0.3s ease;
+      width: 100%;
+      max-width: 800px;
     }
-    
+
     .status-connected {
-      background-color: #d4edda;
-      color: #155724;
-      border: 1px solid #c3e6cb;
+      background: #e6ffed;
+      color: #1a7e3d;
+      border: 1px solid #a3e0c0;
     }
-    
+
     .status-disconnected {
-      background-color: #f8d7da;
-      color: #721c24;
-      border: 1px solid #f5c6cb;
+      background: #ffe6e6;
+      color: #c93b3b;
+      border: 1px solid #f2a7a7;
     }
-    
+
     .status-waiting {
-      background-color: #fff3cd;
-      color: #856404;
-      border: 1px solid #ffeaa7;
+      background: #fff3e0;
+      color: #e67e22;
+      border: 1px solid #ffd591;
+    }
+
+    #viewerList {
+      background-color: #e9ecef;
+      border-radius: 8px;
+      padding: 15px;
+      margin-top: 15px;
+    }
+    #viewerList ul {
+      list-style: none;
+      padding: 0;
+      max-height: 100px;
+      overflow-y: auto;
+      border: 1px solid #dee2e6;
+      border-radius: 5px;
+      background-color: #f8f9fa;
+      padding: 10px;
+    }
+    #viewerList li {
+      padding: 5px 0;
+      border-bottom: 1px dashed #ced4da;
+      font-size: 14px;
+      color: #495057;
+    }
+    #viewerList li:last-child {
+      border-bottom: none;
     }
   </style>
 </head>
 <body>
   <h1>👁️ 수신자 화면</h1>
+  
+  <div class="section-container">
+    <h3>🚪 방 입장 설정</h3>
+    <div class="input-group">
+      <label for="roomIdInput">방 ID:</label>
+      <input type="text" id="roomIdInput" placeholder="입장할 방 ID를 입력하세요" value="defaultRoom" />
+      <button id="enterRoomBtn">방 입장</button>
+    </div>
+    <div class="input-group">
+      <label for="nicknameInput">닉네임:</label>
+      <input type="text" id="nicknameInput" placeholder="닉네임을 입력하세요" value="익명" />
+      <button id="changeNicknameBtn">변경</button>
+    </div>
+    <div id="currentRoomDisplay" style="text-align: center; margin-top: 10px; font-weight: bold; color: #555;">
+      현재 방: <span id="displayRoomId">선택 안됨</span>
+    </div>
+  </div>
+
   <video id="remoteVideo" autoplay playsinline controls></video>
   
-  <div id="chatContainer">
+  <div class="action-buttons">
+    <button id="likeBtn" class="like-btn" disabled>❤️ 좋아요</button>
+    <div class="input-group">
+      <label>별풍선:</label>
+      <input type="number" id="starBalloonInput" class="star-balloon-input" min="1" max="100000" value="1" />
+      <button id="starBalloonBtn" class="star-balloon-btn" disabled>⭐ 보내기</button>
+    </div>
+  </div>
+  
+  <div class="section-container">
     <h3>💬 채팅</h3>
     <div id="chatLog"></div>
     <div id="chatInputContainer">
       <input type="text" id="chatInput" placeholder="메시지를 입력하세요..." autocomplete="off" />
-      <button id="sendBtn">전송</button>
+      <button id="sendBtn" disabled>전송</button>
+    </div>
+  </div>
+
+  <div class="section-container">
+    <h3>👥 접속 중인 시청자 (<span id="viewerCount">0</span>명)</h3>
+    <div id="viewerList">
+      <ul id="activeViewers">
+        </ul>
     </div>
   </div>
   
   <div id="status" class="status-disconnected">연결 중...</div>
 
   <script>
-    const viewerId = Math.random().toString(36).substr(2, 9);
-    const ws = new WebSocket("ws://192.168.0.37:8080");
+    const viewerId = Math.random().toString(36).substr(2, 9); // 고유한 수신자 ID
+    const ws = new WebSocket("ws://localhost:8080");
     const remoteVideo = document.getElementById("remoteVideo");
     const chatInput = document.getElementById("chatInput");
     const chatLog = document.getElementById("chatLog");
     const sendBtn = document.getElementById("sendBtn");
     const status = document.getElementById("status");
+    const nicknameInput = document.getElementById("nicknameInput");
+    const changeNicknameBtn = document.getElementById("changeNicknameBtn");
+    const likeBtn = document.getElementById("likeBtn");
+    const starBalloonBtn = document.getElementById("starBalloonBtn");
+    const starBalloonInput = document.getElementById("starBalloonInput");
+    const roomIdInput = document.getElementById("roomIdInput");
+    const enterRoomBtn = document.getElementById("enterRoomBtn");
+    const displayRoomId = document.getElementById("displayRoomId");
+    const activeViewersList = document.getElementById("activeViewers");
+    const viewerCountDisplay = document.getElementById("viewerCount");
 
     let pc = null;
-    let isConnected = false;
+    let iceCandidateQueue = [];
+    let isWsConnected = false;
+    let hasEnteredRoom = false; // 방 입장 여부
+    let currentNickname = "익명";
+    let currentRoomId = null; // 현재 입장한 방 ID
+
+    // 초기 닉네임 설정
+    nicknameInput.value = currentNickname;
 
     // WebSocket 연결 처리
     ws.onopen = () => {
       console.log(`🔗 WebSocket 연결됨 (ID: ${viewerId})`);
-      ws.send(JSON.stringify({ role: "viewer", viewerId: viewerId }));
-      updateStatus("서버에 연결됨, 송신자 대기 중...", "waiting");
+      isWsConnected = true;
+      updateStatus("시그널링 서버에 연결됨. 방에 입장해주세요.", "status-waiting");
+      enterRoomBtn.disabled = false; // 연결되면 방 입장 버튼 활성화
     };
 
     ws.onclose = () => {
       console.log("❌ WebSocket 연결 종료");
-      updateStatus("연결이 끊어졌습니다", "disconnected");
-      isConnected = false;
-      sendBtn.disabled = true;
+      isWsConnected = false;
+      hasEnteredRoom = false;
+      updateStatus("연결이 끊어졌습니다.", "status-disconnected");
+      disableInteractionButtons();
+      if (pc) {
+        pc.close();
+        pc = null;
+      }
+      remoteVideo.srcObject = null; // 비디오 스트림 해제
+      appendSystemMessage("서버와의 연결이 끊어졌습니다.");
+      displayRoomId.textContent = "연결 끊김";
+      updateViewerList([]);
     };
 
     ws.onerror = (error) => {
       console.error("🚨 WebSocket 오류:", error);
-      updateStatus("연결 오류가 발생했습니다", "disconnected");
+      updateStatus("연결 오류가 발생했습니다.", "status-disconnected");
     };
 
     ws.onmessage = async (event) => {
@@ -151,13 +403,65 @@
 
         switch (data.type) {
           case "offer":
-            await handleOffer(data);
+            if (data.roomId === currentRoomId) { // 현재 방의 offer만 처리
+                await handleOffer(data);
+                appendSystemMessage(`🎥 송신자가 스트리밍을 시작했습니다.`);
+            } else {
+                console.warn(`다른 방(${data.roomId})의 offer 수신, 무시함.`);
+            }
             break;
           case "candidate":
-            await handleCandidate(data);
+            if (data.roomId === currentRoomId) { // 현재 방의 candidate만 처리
+                await handleCandidate(data);
+            }
             break;
           case "chat":
             appendChatMessage(data.from, data.message);
+            break;
+          case "like":
+            // 본인이 보낸 좋아요는 이미 로컬에서 처리했으므로, 서버에서 온 것은 무시 (중복 방지)
+            // 아니면 본인이 보낸 메시지임을 확인하고 다른 메시지 처리 로직을 추가할 수도 있습니다.
+            // 여기서는 모든 좋아요 메시지를 처리하도록 유지하여, 로컬 피드백과 별도로 서버로부터의 확인 메시지로 간주합니다.
+            // 더 정교하게 하려면 메시지에 UUID 등을 넣어 중복을 제거할 수 있습니다.
+            handleLikeUpdate(data);
+            break;
+          case "star-balloon":
+            // 본인이 보낸 별풍선은 이미 로컬에서 처리했으므로, 서버에서 온 것은 무시 (중복 방지)
+            handleStarBalloon(data);
+            break;
+          case "nickname-change":
+            handleNicknameChange(data);
+            break;
+          case "sender-available":
+            if (data.roomId === currentRoomId) {
+                appendSystemMessage(`✅ 송신자가 방에 접속했습니다. 곧 스트림이 시작됩니다.`);
+                // 송신자가 나갔다가 다시 들어왔을 경우를 대비하여 Offer 재요청 로직이 필요할 수 있습니다.
+                // 현재는 송신자가 들어오면 Offer를 보낸다고 가정합니다.
+            }
+            break;
+          case "no-sender-available":
+            if (data.roomId === currentRoomId) {
+                updateStatus(`방 "${data.roomId}"에 송신자가 없습니다.`, "status-waiting");
+                appendSystemMessage(`⚠️ 방 "${data.roomId}"에 송신자가 현재 없습니다. 대기 중...`);
+                disableInteractionButtons(); // 송신자 없으면 채팅/액션 비활성화
+            }
+            break;
+          case "sender-disconnected":
+            if (data.roomId === currentRoomId) {
+                updateStatus(`방 "${data.roomId}"의 송신자가 연결을 끊었습니다.`, "status-disconnected");
+                appendSystemMessage(`❌ 송신자가 방을 떠났습니다. 스트림 종료.`);
+                remoteVideo.srcObject = null;
+                disableInteractionButtons();
+                if (pc) {
+                    pc.close();
+                    pc = null;
+                }
+            }
+            break;
+          case "room-members":
+            if (data.roomId === currentRoomId) {
+                updateViewerList(data.members);
+            }
             break;
           default:
             console.warn("⚠️ 알 수 없는 메시지 타입:", data.type);
@@ -167,17 +471,69 @@
       }
     };
 
+    // 방 입장 처리
+    enterRoomBtn.addEventListener("click", () => {
+        if (!isWsConnected) {
+            alert("먼저 시그널링 서버에 연결되어야 합니다.");
+            return;
+        }
+        const newRoomId = roomIdInput.value.trim();
+        if (!newRoomId) {
+            alert("입장할 방 ID를 입력해주세요.");
+            return;
+        }
+
+        if (hasEnteredRoom && newRoomId === currentRoomId) {
+            alert(`이미 "${newRoomId}" 방에 입장해 있습니다.`);
+            return;
+        }
+
+        // 기존 방에서 나가는 처리 (선택적으로 구현)
+        if (pc) {
+            pc.close();
+            pc = null;
+            remoteVideo.srcObject = null;
+            console.log("기존 PeerConnection 종료");
+        }
+        
+        currentRoomId = newRoomId;
+        displayRoomId.textContent = currentRoomId;
+        hasEnteredRoom = true;
+        iceCandidateQueue = []; // 방 변경 시 ICE 큐 초기화
+
+        ws.send(JSON.stringify({
+            type: "enterRoom",
+            role: "viewer",
+            viewerId: viewerId,
+            roomId: currentRoomId
+        }));
+        
+        updateStatus(`방 "${currentRoomId}"에 입장 요청 중...`, "status-waiting");
+        appendSystemMessage(`🎉 방 "${currentRoomId}"에 입장했습니다.`);
+        console.log(`✅ 방 입장 요청: ${currentRoomId}`);
+        sendBtn.disabled = false; // 방에 입장하면 채팅 가능
+    });
+
+    // 방 ID 입력창에서 Enter 키
+    roomIdInput.addEventListener("keydown", (e) => {
+        if (e.key === "Enter") {
+            e.preventDefault();
+            enterRoomBtn.click();
+        }
+    });
+
+
     // Offer 처리
     async function handleOffer(data) {
       console.log("📨 Offer 수신");
       
-      // 기존 연결이 있다면 정리
+      // 기존 PeerConnection이 있다면 정리
       if (pc) {
         pc.close();
         pc = null;
+        console.log("기존 PeerConnection 정리 완료.");
       }
 
-      // 새 PeerConnection 생성
       pc = new RTCPeerConnection({
         iceServers: [
           { urls: "stun:stun.l.google.com:19302" },
@@ -185,36 +541,41 @@
         ]
       });
 
-      // 미디어 스트림 수신 처리
       pc.ontrack = (event) => {
         console.log("🎥 미디어 스트림 수신");
-        remoteVideo.srcObject = event.streams[0];
-        updateStatus("영상 스트림 연결됨", "connected");
-        isConnected = true;
-        sendBtn.disabled = false;
+        if (remoteVideo.srcObject !== event.streams[0]) {
+            remoteVideo.srcObject = event.streams[0];
+            updateStatus("영상 스트림 연결됨", "status-connected");
+            enableInteractionButtons(); // 스트림 수신 시 좋아요/별풍선/채팅 활성화
+        }
       };
 
-      // ICE Candidate 처리
       pc.onicecandidate = (event) => {
-        if (event.candidate) {
+        if (event.candidate && hasEnteredRoom && currentRoomId) { // 방에 입장한 상태에서만 전송
           ws.send(JSON.stringify({
             type: "candidate",
             from: viewerId,
-            to: data.from,
-            candidate: event.candidate
+            to: data.from, // offer를 보낸 송신자에게 다시 보냄
+            candidate: event.candidate,
+            roomId: currentRoomId // 방 ID 포함
           }));
         }
       };
 
-      // 연결 상태 모니터링
       pc.onconnectionstatechange = () => {
         console.log(`🔗 연결 상태: ${pc.connectionState}`);
         if (pc.connectionState === "connected") {
-          updateStatus("연결 완료", "connected");
-        } else if (pc.connectionState === "disconnected" || pc.connectionState === "failed") {
-          updateStatus("연결이 끊어졌습니다", "disconnected");
-          isConnected = false;
-          sendBtn.disabled = true;
+          updateStatus("연결 완료", "status-connected");
+          enableInteractionButtons();
+        } else if (pc.connectionState === "disconnected" || pc.connectionState === "failed" || pc.connectionState === "closed") {
+          updateStatus("스트림 연결이 끊어졌습니다. 송신자 재접속 대기 중...", "status-disconnected");
+          disableInteractionButtons();
+          remoteVideo.srcObject = null;
+          if (pc) {
+            pc.close();
+            pc = null;
+          }
+          appendSystemMessage("스트림 연결이 끊어졌습니다. 송신자 대기 중...");
         }
       };
 
@@ -222,34 +583,62 @@
         console.log(`🧊 ICE 상태: ${pc.iceConnectionState}`);
       };
 
+      // 데이터 채널 설정 (송신자로부터 열릴 채널을 받음)
+      pc.ondatachannel = (event) => {
+        const dataChannel = event.channel;
+        console.log(`✅ 데이터 채널 수신됨: ${dataChannel.label}`);
+        dataChannel.onopen = () => {
+            console.log("데이터 채널 열림 (수신자)");
+            // dataChannel.send("Hello from viewer!"); // 테스트 메시지
+        };
+        dataChannel.onmessage = (e) => {
+            console.log("데이터 채널 메시지 수신:", e.data);
+            // 이곳에서 데이터 채널 메시지를 처리할 수 있습니다.
+        };
+        dataChannel.onclose = () => console.log("데이터 채널 닫힘 (수신자)");
+        dataChannel.onerror = (error) => console.error("데이터 채널 오류 (수신자):", error);
+      };
+
       try {
-        // Remote Description 설정
         await pc.setRemoteDescription(data.sdp);
+        console.log("✅ Remote Description 설정 완료");
         
-        // Answer 생성
+        // 큐에 있던 ICE candidate들 추가
+        for (const candidate of iceCandidateQueue) {
+          try {
+            await pc.addIceCandidate(candidate);
+            console.log("✅ 큐에 있던 ICE Candidate 추가");
+          } catch (e) {
+            console.warn("⚠️ 큐에 있던 ICE Candidate 추가 실패:", e);
+          }
+        }
+        iceCandidateQueue = []; // 큐 비우기
+
         const answer = await pc.createAnswer();
         await pc.setLocalDescription(answer);
 
-        // Answer 전송
         ws.send(JSON.stringify({
           type: "answer",
           from: viewerId,
-          to: data.from,
-          sdp: answer
+          to: data.from, // answer를 받을 대상은 offer를 보낸 송신자
+          sdp: answer,
+          roomId: currentRoomId // 방 ID 포함
         }));
 
         console.log("📤 Answer 전송 완료");
-        updateStatus("연결 설정 중...", "waiting");
+        updateStatus("연결 설정 중...", "status-waiting");
       } catch (error) {
         console.error("❌ Offer 처리 실패:", error);
-        updateStatus("연결 설정 실패", "disconnected");
+        updateStatus("연결 설정 실패", "status-disconnected");
+        disableInteractionButtons();
       }
     }
 
     // ICE Candidate 처리
     async function handleCandidate(data) {
-      if (!pc) {
-        console.warn("⚠️ PeerConnection이 없습니다");
+      if (!pc || !pc.remoteDescription || !pc.remoteDescription.type) {
+        console.log("🧊 ICE Candidate 큐에 저장");
+        iceCandidateQueue.push(data.candidate);
         return;
       }
 
@@ -261,24 +650,142 @@
       }
     }
 
+    // 좋아요 업데이트 처리
+    function handleLikeUpdate(data) {
+      appendSystemMessage(`❤️ 좋아요! (${data.from}님이 눌렀습니다)`);
+    }
+
+    // 별풍선 처리
+    function handleStarBalloon(data) {
+      const effectDiv = document.createElement("div");
+      effectDiv.className = "effect-message";
+      effectDiv.innerHTML = `⭐ ${escapeHtml(data.from)}님이 별풍선 ${data.count}개를 보냈습니다! ⭐`;
+      
+      chatLog.appendChild(effectDiv);
+      chatLog.scrollTop = chatLog.scrollHeight;
+      
+      // 3초 후 일반 메시지로 변경
+      setTimeout(() => {
+        // 원래의 chat-message 스타일로 되돌릴 필요가 있다면 여기에 추가
+        // 현재는 effect-message 클래스를 유지하며 스타일만 변경
+        effectDiv.style.background = "#e9ecef";
+        effectDiv.style.border = "none";
+        effectDiv.style.animation = "none";
+        effectDiv.style.boxShadow = "none";
+        effectDiv.style.color = "#333";
+        effectDiv.style.textAlign = "left";
+      }, 3000);
+    }
+
+    // 닉네임 변경 처리
+    function handleNicknameChange(data) {
+      appendSystemMessage(`📝 ${escapeHtml(data.oldNickname)}님이 닉네임을 "${escapeHtml(data.newNickname)}"로 변경했습니다`);
+    }
+
     // 채팅 메시지 추가
     function appendChatMessage(sender, message) {
       const div = document.createElement("div");
-      div.style.marginBottom = "5px";
+      div.className = "chat-message";
       div.innerHTML = `<strong>${escapeHtml(sender)}:</strong> ${escapeHtml(message)}`;
       chatLog.appendChild(div);
       chatLog.scrollTop = chatLog.scrollHeight;
     }
 
+    // 시스템 메시지 추가
+    function appendSystemMessage(message) {
+      const div = document.createElement("div");
+      div.className = "system-message";
+      div.innerHTML = escapeHtml(message);
+      chatLog.appendChild(div);
+      chatLog.scrollTop = chatLog.scrollHeight;
+    }
+
+    // 닉네임 변경
+    function changeNickname() {
+      const newNickname = nicknameInput.value.trim();
+      if (!newNickname) {
+        alert("닉네임을 입력해주세요.");
+        return;
+      }
+      if (newNickname === currentNickname) {
+        return;
+      }
+
+      const oldNickname = currentNickname;
+      currentNickname = newNickname;
+
+      if (hasEnteredRoom && isWsConnected) {
+        ws.send(JSON.stringify({
+          type: "nickname-change",
+          from: viewerId, // 실제 송신자는 viewerId
+          oldNickname: oldNickname,
+          newNickname: newNickname,
+          roomId: currentRoomId // 방 ID 포함
+        }));
+      }
+
+      appendSystemMessage(`📝 닉네임을 "${escapeHtml(newNickname)}"로 변경했습니다`);
+    }
+
+    // 좋아요 전송
+    function sendLike() {
+      if (!isWsConnected || !hasEnteredRoom) return;
+
+      ws.send(JSON.stringify({
+        type: "like",
+        from: currentNickname,
+        viewerId: viewerId,
+        roomId: currentRoomId // 방 ID 포함
+      }));
+
+      // 본인 채팅창에 즉시 표시
+      appendSystemMessage(`❤️ 내가 좋아요를 눌렀습니다!`);
+
+      // 버튼 애니메이션
+      likeBtn.style.transform = "scale(1.2)";
+      setTimeout(() => {
+        likeBtn.style.transform = "scale(1)";
+      }, 200);
+    }
+
+    // 별풍선 전송
+    function sendStarBalloon() {
+      if (!isWsConnected || !hasEnteredRoom) return;
+
+      const count = parseInt(starBalloonInput.value);
+      if (isNaN(count) || count < 1 || count > 100000) {
+        alert("별풍선은 1개부터 100000개까지 보낼 수 있습니다.");
+        return;
+      }
+
+      ws.send(JSON.stringify({
+        type: "star-balloon",
+        from: currentNickname,
+        count: count,
+        viewerId: viewerId,
+        roomId: currentRoomId // 방 ID 포함
+      }));
+
+      // 본인 채팅창에 즉시 표시
+      appendSystemMessage(`⭐ 내가 별풍선 ${count}개를 보냈습니다!`);
+
+      // 버튼 애니메이션
+      starBalloonBtn.style.transform = "scale(1.2)";
+      setTimeout(() => {
+        starBalloonBtn.style.transform = "scale(1)";
+      }, 200);
+    }
+
     // 채팅 전송
     function sendChat() {
       const message = chatInput.value.trim();
-      if (!message || !isConnected) return;
+      if (!message || !isWsConnected || !hasEnteredRoom) return;
 
       ws.send(JSON.stringify({ 
         type: "chat", 
-        from: viewerId, 
-        message: message 
+        from: currentNickname, // 채팅 보낼 때 닉네임 사용
+        message: message,
+        roomId: currentRoomId // 방 ID 포함
       }));
       
       appendChatMessage("나", message);
@@ -288,7 +795,21 @@
     // 상태 업데이트
     function updateStatus(message, type) {
       status.textContent = message;
-      status.className = `status-${type}`;
+      status.className = `status ${type}`;
+    }
+
+    // 상호작용 버튼 활성화
+    function enableInteractionButtons() {
+        sendBtn.disabled = false;
+        likeBtn.disabled = false;
+        starBalloonBtn.disabled = false;
+    }
+
+    // 상호작용 버튼 비활성화
+    function disableInteractionButtons() {
+        sendBtn.disabled = true;
+        likeBtn.disabled = true;
+        starBalloonBtn.disabled = true;
     }
 
     // HTML 이스케이프
@@ -298,7 +819,43 @@
       return div.innerHTML;
     }
 
+    // 접속 중인 뷰어 목록 업데이트
+    function updateViewerList(members) {
+        activeViewersList.innerHTML = '';
+        viewerCountDisplay.textContent = members.length;
+        if (members.length === 0) {
+            const li = document.createElement("li");
+            li.textContent = "아직 접속 중인 시청자가 없습니다.";
+            activeViewersList.appendChild(li);
+        } else {
+            members.forEach(memberId => {
+                const li = document.createElement("li");
+                li.textContent = (memberId === viewerId) ? `${currentNickname} (나)` : memberId; // 내 닉네임 표시
+                activeViewersList.appendChild(li);
+            });
+        }
+    }
+
+
     // 이벤트 리스너
+    changeNicknameBtn.addEventListener("click", changeNickname);
+    nicknameInput.addEventListener("keydown", (e) => {
+      if (e.key === "Enter") {
+        e.preventDefault();
+        changeNickname();
+      }
+    });
+
+    likeBtn.addEventListener("click", sendLike);
+    starBalloonBtn.addEventListener("click", sendStarBalloon);
+    
+    starBalloonInput.addEventListener("keydown", (e) => {
+      if (e.key === "Enter") {
+        e.preventDefault();
+        sendStarBalloon();
+      }
+    });
+
     sendBtn.addEventListener("click", sendChat);
     chatInput.addEventListener("keydown", (e) => {
       if (e.key === "Enter") {
@@ -316,7 +873,10 @@
     });
 
     // 초기 상태 설정
-    sendBtn.disabled = true;
+    disableInteractionButtons(); // 초기에는 모든 상호작용 버튼 비활성화
+    enterRoomBtn.disabled = true; // WebSocket 연결 전까지 방 입장 버튼 비활성화
+    displayRoomId.textContent = "선택 안됨"; // 초기 방 ID 표시
+    updateViewerList([]); // 초기 뷰어 목록 비우기
   </script>
 </body>
 </html>

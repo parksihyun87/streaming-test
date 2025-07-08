@@ -1,0 +1,8 @@
+.map-container {
+  position: absolute;
+  top: 0;
+  left: 0;
+  background-repeat: no-repeat;
+  background-position: center;
+  background-size: cover; /* 이미지가 맵 영역에 꽉 차도록 */
+}

@@ -1,0 +1,77 @@
+/* src/components/ChatWindow.css */
+.chat-window-container {
+  /* position, bottom, right 속성 제거 */
+  
+  width: 100%; /* 부모 요소의 너비를 따르도록 설정 */
+  max-width: 400px; /* 채팅창의 최대 너비 제한 (너무 커지지 않게) */
+  height: 300px; /* 채팅창의 고정 높이 */
+  background-color: rgba(255, 255, 255, 0.9); /* 반투명 배경 */
+  border-radius: 10px;
+  box-shadow: 0 4px 10px rgba(0, 0, 0, 0.2);
+  display: flex;
+  flex-direction: column;
+  overflow: hidden; /* **내용이 넘치면 잘리도록 설정 (스크롤바 없음)** */
+  padding: 15px; /* 내부 여유 공간 추가 */
+  box-sizing: border-box; /* 패딩이 width/height에 포함되도록 계산 */
+  margin: 20px auto; /* 상하 여백 20px, 좌우 자동으로 중앙 정렬 */
+}
+
+.chat-window-container h3 {
+  margin-top: 0;
+  margin-bottom: 10px;
+  color: #333;
+  text-align: center;
+  border-bottom: 1px solid #eee;
+  padding-bottom: 10px;
+}
+
+.chat-messages {
+  flex-grow: 1; /* 남은 공간을 모두 차지하여 메시지 목록이 확장되도록 함 */
+  overflow-y: hidden; /* **스크롤바 제거!** 내용이 넘치면 잘리지만 스크롤은 안됩니다. */
+  margin-bottom: 10px; /* 입력창과의 여유 */
+  word-wrap: break-word; /* 긴 단어 자동 줄바꿈 */
+  /* white-space: pre-wrap; /* 여러 칸 공백이나 줄바꿈을 그대로 유지하려면 이 속성을 추가하세요. */
+}
+
+.chat-messages p {
+  margin: 5px 0;
+  line-height: 1.4;
+}
+
+.chat-messages p strong {
+  color: #007bff; /* 보낸 사람 닉네임 색상 */
+}
+
+.chat-messages .system-message {
+  color: #6c757d; /* 시스템 메시지 색상 */
+  font-style: italic;
+  text-align: center;
+}
+
+.chat-input-form {
+  display: flex;
+  gap: 10px; /* 입력창과 버튼 사이 간격 */
+}
+
+.chat-input-form input[type="text"] {
+  flex-grow: 1; /* 입력 필드가 남은 공간을 모두 차지 */
+  padding: 8px 12px;
+  border: 1px solid #ddd;
+  border-radius: 5px;
+  font-size: 14px;
+}
+
+.chat-input-form button {
+  padding: 8px 15px;
+  background-color: #007bff;
+  color: white;
+  border: none;
+  border-radius: 5px;
+  cursor: pointer;
+  font-size: 14px;
+  transition: background-color 0.2s ease;
+}
+
+.chat-input-form button:hover {
+  background-color: #0056b3;
+}
