@@ -2,7 +2,7 @@
 const WebSocket = require("ws");
 
 const wss = new WebSocket.Server({ port: 8080 });
-console.log("✅ 시그널링 서버 실행 중 (ws://192.168.0.71:8080)");
+console.log("✅ 시그널링 서버 실행 중 (ws://192.168.0.63:8080)");
 
 // rooms: Map<roomId, { sender: WebSocket, viewers: Map<viewerId, WebSocket> }>
 const rooms = new Map();

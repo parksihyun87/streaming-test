@@ -7,7 +7,7 @@ import ChatWindow from './components/ChatWindow';
 import VideoStream from './components/VideoStream'; // WebRTC 비디오 스트림 컴포넌트
 import './App.css'; // 기본 CSS
 
-const WS_URL = 'ws://localhost:8080'; // 시그널링 서버 주소
+const WS_URL = 'ws://192.168.0.63:8080'; // 시그널링 서버 주소
 
 function App() {
   const [nickname, setNickname] = useState('플레이어1');
