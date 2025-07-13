@@ -32,14 +32,14 @@
       margin-top: 0;
       margin-bottom: 20px;
     }
-    #roomSelection, #streamOptions {
+    #roomSelection, #streamOptions, #nicknameSetting { /* Add #nicknameSetting */
       display: flex;
       flex-wrap: wrap;
       gap: 10px;
       margin-bottom: 20px;
       align-items: center;
     }
-    #roomSelection input[type="text"] {
+    #roomSelection input[type="text"], #nicknameSetting input[type="text"] { /* Apply to nickname input too */
       flex: 1;
       padding: 10px 15px;
       border: 1px solid #ccc;
@@ -47,7 +47,7 @@
       font-size: 16px;
       min-width: 150px;
     }
-    #roomSelection button, #streamOptions button {
+    #roomSelection button, #streamOptions button, #nicknameSetting button { /* Apply to nickname button too */
       padding: 10px 20px;
       background-color: #007bff;
       color: white;
@@ -57,7 +57,7 @@
       font-size: 16px;
       transition: background-color 0.3s ease;
     }
-    #roomSelection button:hover, #streamOptions button:hover {
+    #roomSelection button:hover, #streamOptions button:hover, #nicknameSetting button:hover { /* Apply to nickname button too */
       background-color: #0056b3;
     }
     #streamOptions button.active {
@@ -99,6 +99,10 @@
     #viewerList li:last-child {
       border-bottom: none;
     }
+    .viewer-item.fan { /* Style for fan in viewer list (sender side) */
+        font-weight: bold;
+        color: #9333ea;
+    }
     #chatLog {
       height: 200px;
       overflow-y: auto;
@@ -109,6 +113,39 @@
       margin-bottom: 10px;
       font-size: 14px;
       line-height: 1.5;
+    }
+    .chat-message strong { /* Style for chat sender name */
+        color: #007bff;
+    }
+    .chat-message.fan strong { /* Style for fan chat sender name */
+        color: #9333ea;
+    }
+    .system-message {
+      color: #6c757d;
+      font-style: italic;
+      text-align: center;
+      margin: 10px 0;
+      font-size: 14px;
+      padding: 5px;
+      border-radius: 5px;
+      background: #e2e6ea;
+    }
+    .effect-message {
+      background: linear-gradient(90deg, #ffedd5, #fef3c7);
+      color: #8a6d3b;
+      padding: 12px 18px;
+      border-radius: 10px;
+      margin: 8px 0;
+      font-weight: bold;
+      border: 2px solid #fce891;
+      box-shadow: 0 4px 15px rgba(255, 215, 0, 0.5);
+      animation: sparkle 1s ease-in-out;
+      text-align: center;
+    }
+    @keyframes sparkle {
+      0% { transform: scale(0.8); opacity: 0; }
+      50% { transform: scale(1.1); opacity: 1; }
+      100% { transform: scale(1); opacity: 1; }
     }
     #chatInputContainer {
       display: flex;
@@ -176,6 +213,15 @@
   </div>
 
   <div class="section-container">
+    <h3>👤 닉네임 설정</h3>
+    <div id="nicknameSetting">
+      <label for="senderNicknameInput">내 닉네임:</label>
+      <input type="text" id="senderNicknameInput" placeholder="닉네임을 입력하세요" value="송신자" />
+      <button id="changeSenderNicknameBtn">변경</button>
+    </div>
+  </div>
+
+  <div class="section-container">
     <h3>🎬 스트림 옵션</h3>
     <div id="streamOptions">
       <button id="cameraBtn">📹 카메라 + 오디오</button>
@@ -210,7 +256,8 @@
 
   <script>
     const senderId = "sender"; // 송신자 고유 ID
-    const ws = new WebSocket("ws://192.168.0.63:8080");
+    const ws = new WebSocket("ws://192.168.0.238:8080");
+    // const ws = new WebSocket("ws://localhost:8080");
     const testCanvas = document.getElementById("testCanvas");
     const ctx = testCanvas.getContext("2d");
     const hiddenVideo = document.getElementById("hiddenVideo");
@@ -223,6 +270,8 @@
     const currentRoomIdDisplay = document.getElementById("currentRoomId");
     const activeViewersList = document.getElementById("activeViewers");
     const viewerCountDisplay = document.getElementById("viewerCount");
+    const senderNicknameInput = document.getElementById("senderNicknameInput"); // New sender nickname input
+    const changeSenderNicknameBtn = document.getElementById("changeSenderNicknameBtn"); // New sender nickname change button
 
     let localStream = null;
     let animationId = null;
@@ -232,10 +281,12 @@
     let isStreamActive = false; // 스트림 활성화 상태 (미디어 트랙 전송 준비 완료)
     let currentMode = null; // 현재 스트리밍 모드 (camera, audio, canvas, screen, data)
     let selectedRoomId = "defaultRoom"; // 사용자가 선택한 방 ID
+    let currentSenderNickname = localStorage.getItem('senderNickname') || "송신자"; // Load sender nickname
 
-    // 초기 방 ID 표시
+    // 초기 방 ID 및 닉네임 표시
     currentRoomIdDisplay.textContent = selectedRoomId;
     roomIdInput.value = selectedRoomId;
+    senderNicknameInput.value = currentSenderNickname;
 
     // WebSocket 연결 처리
     ws.onopen = () => {
@@ -244,8 +295,8 @@
       updateStatus("WebSocket 연결됨. 방을 설정하고 스트림 옵션을 선택하세요.", "status-warning");
       // 방 설정 버튼 활성화
       setRoomBtn.disabled = false;
-      // 초기 송신자 역할 메시지 전송 (방 설정 완료 후)
-      // ws.send(JSON.stringify({ role: "sender", roomId: selectedRoomId }));
+      // Initial sender role message with nickname
+      // This will be sent after setRoomBtn is clicked
     };
 
     ws.onclose = () => {
@@ -272,7 +323,8 @@
 
         switch (data.type) {
           case "viewer-joined":
-            await handleViewerJoined(data.viewerId);
+            // data now contains nickname and isFan
+            await handleViewerJoined(data.viewerId, data.nickname, data.isFan);
             break;
           case "answer":
             await handleAnswer(data);
@@ -284,19 +336,33 @@
             handleViewerLeft(data.viewerId);
             break;
           case "chat":
-            appendChatMessage(data.from, data.message);
+            // Pass isFan status to appendChatMessage
+            appendChatMessage(data.from, data.message, data.isFan);
             break;
           case "like":
-            appendSystemMessage(`❤️ ${data.from}님이 좋아요를 눌렀습니다!`);
+            appendSystemMessage(`❤️ ${data.from}${data.isFan ? '(팬)' : ''}님이 좋아요를 눌렀습니다!`); // Show fan status
             break;
           case "star-balloon":
-            appendSystemMessage(`⭐ ${data.from}님이 별풍선 ${data.count}개를 보냈습니다!`);
+            appendSystemMessage(`⭐ ${data.from}${data.isFan ? '(팬)' : ''}님이 별풍선 ${data.count}개를 보냈습니다!`); // Show fan status
             break;
           case "nickname-change":
-            appendSystemMessage(`📝 ${data.oldNickname}님이 닉네임을 "${data.newNickname}"로 변경했습니다.`);
+            const displayOldNickname = data.isFan ? `[팬]${data.oldNickname}` : data.oldNickname;
+            const displayNewNickname = data.isFan ? `[팬]${data.newNickname}` : data.newNickname;
+            appendSystemMessage(`📝 ${displayOldNickname}님이 닉네임을 "${displayNewNickname}"로 변경했습니다.`);
             break;
           case "room-members":
-            updateViewerList(data.members);
+            // data.members now includes nickname and isFan status
+            updateViewerList(data.members, data.senderNickname); // Pass senderNickname
+            break;
+          case "fan-status-update": // New: Handle fan status updates from server
+            appendSystemMessage(`💜 ${data.nickname}님이 ${data.isFan ? '팬이 되었습니다!' : '팬 가입을 해제했습니다.'}`);
+            // Re-broadcast room members to update list with fan status
+            // This is already triggered by the server, so no need to explicitly call here.
+            break;
+          case "sender-nickname-change": // New: Handle sender nickname change (for sender itself to confirm)
+            // This message is primarily for viewers, sender's UI is updated locally
+            // But if sender receives it, it confirms the server processed it.
+            console.log(`송신자 닉네임이 "${data.newNickname}"으로 변경되었습니다.`);
             break;
           default:
             console.warn("⚠️ 알 수 없는 메시지 타입:", data.type);
@@ -312,11 +378,11 @@
       if (newRoomId && isWsConnected) {
         selectedRoomId = newRoomId;
         currentRoomIdDisplay.textContent = selectedRoomId;
-        ws.send(JSON.stringify({ role: "sender", roomId: selectedRoomId }));
+        // Send sender role message with current nickname
+        ws.send(JSON.stringify({ role: "sender", roomId: selectedRoomId, nickname: currentSenderNickname }));
         updateStatus(`방 "${selectedRoomId}"으로 설정됨. 스트림 옵션을 선택하세요.`, "status-warning");
         console.log(`✅ 방 ID 설정: ${selectedRoomId}`);
-        // 방을 설정했으므로 채팅 전송 버튼 활성화
-        sendBtn.disabled = false;
+        sendBtn.disabled = false; // 방을 설정했으므로 채팅 전송 버튼 활성화
       } else {
         alert("유효한 방 ID를 입력하고 WebSocket이 연결되어 있어야 합니다.");
       }
@@ -329,6 +395,176 @@
         setRoomBtn.click();
       }
     });
+
+    // New: Change sender nickname
+    changeSenderNicknameBtn.addEventListener("click", () => {
+      const newNickname = senderNicknameInput.value.trim();
+      if (newNickname && newNickname !== currentSenderNickname) {
+        const oldNickname = currentSenderNickname;
+        currentSenderNickname = newNickname;
+        localStorage.setItem('senderNickname', currentSenderNickname); // Persist sender nickname
+        // Send nickname change to server
+        if (isWsConnected && selectedRoomId) {
+            ws.send(JSON.stringify({
+                type: "sender-nickname-change",
+                newNickname: newNickname,
+                roomId: selectedRoomId
+            }));
+            appendSystemMessage(`📝 내 닉네임을 "${newNickname}"로 변경했습니다.`);
+        } else {
+            alert("WebSocket이 연결되어 있고 방이 설정되어 있어야 닉네임을 변경할 수 있습니다.");
+        }
+      } else if (!newNickname) {
+        alert("닉네임을 입력해주세요.");
+      }
+    });
+
+    senderNicknameInput.addEventListener("keydown", (e) => {
+      if (e.key === "Enter") {
+        e.preventDefault();
+        changeSenderNicknameBtn.click();
+      }
+    });
+
+    // WebRTC connection setup functions (mostly existing, with minor modifications)
+    async function createPeerConnection(viewerId) {
+        // ... (existing code for RTCPeerConnection setup)
+        const pc = new RTCPeerConnection({
+            iceServers: [
+                { urls: "stun:stun.l.google.com:19302" },
+                { urls: "stun:stun1.l.google.com:19302" },
+            ],
+        });
+
+        pc.onicecandidate = (event) => {
+            if (event.candidate) {
+                console.log("ICE candidate 전송:", event.candidate);
+                ws.send(
+                    JSON.stringify({
+                        type: "candidate",
+                        candidate: event.candidate,
+                        to: viewerId,
+                        from: senderId,
+                        roomId: selectedRoomId,
+                    })
+                );
+            }
+        };
+
+        let dataChannel = pc.createDataChannel("chat");
+        dataChannel.onopen = () => {
+            console.log("Data Channel opened with", viewerId);
+            // Optionally send initial data or welcome message
+        };
+        dataChannel.onmessage = (e) => {
+            const msg = JSON.parse(e.data);
+            console.log('Data Channel Message from viewer:', msg);
+            if (msg.type === "chat") {
+              appendChatMessage(msg.from, msg.message, msg.isFan);
+            } else if (msg.type === "like") {
+              appendSystemMessage(`❤️ ${msg.from}${msg.isFan ? '(팬)' : ''}님이 좋아요를 눌렀습니다!`);
+            } else if (msg.type === "star-balloon") {
+              appendSystemMessage(`⭐ ${msg.from}${msg.isFan ? '(팬)' : ''}님이 별풍선 ${msg.count}개를 보냈습니다!`);
+            }
+        };
+        dataChannel.onclose = () => console.log("Data Channel closed with", viewerId);
+        dataChannel.onerror = (error) => console.error("Data Channel error with", viewerId, error);
+
+        return pc;
+    }
+
+    async function handleViewerJoined(viewerId, nickname, isFan) { // Add nickname and isFan
+      console.log(`[${viewerId}] 수신자 접속. PeerConnection 생성 중...`);
+      // 기존 연결이 있다면 제거하고 새로 만듭니다. (재접속 처리)
+      if (peerConnections.has(viewerId)) {
+        peerConnections.get(viewerId).close();
+        peerConnections.delete(viewerId);
+        iceCandidateQueues.delete(viewerId);
+      }
+
+      const pc = await createPeerConnection(viewerId);
+      peerConnections.set(viewerId, pc);
+      iceCandidateQueues.set(viewerId, []); // 각 수신자별로 ICE 큐 관리
+
+      // 기존 스트림이 있다면 트랙 추가
+      if (localStream) {
+        localStream.getTracks().forEach((track) => pc.addTrack(track, localStream));
+        console.log(`[${viewerId}] 기존 스트림 트랙 추가됨.`);
+      }
+
+      const offer = await pc.createOffer();
+      await pc.setLocalDescription(offer);
+      ws.send(
+        JSON.stringify({
+          type: "offer",
+          offer: pc.localDescription,
+          to: viewerId,
+          from: senderId,
+          roomId: selectedRoomId,
+        })
+      );
+      console.log(`[${viewerId}] Offer 전송 완료.`);
+      updateStatus("🟢 스트리밍 준비 완료. 수신자 응답 대기 중...", "status-connected");
+      // updateViewerList(); // 새로운 수신자 접속 시 목록 업데이트
+    }
+
+    async function handleAnswer(data) {
+      const pc = peerConnections.get(data.from);
+      if (!pc) {
+        console.error("Answer를 보낸 수신자에 대한 PeerConnection이 없습니다:", data.from);
+        return;
+      }
+      const remoteDesc = new RTCSessionDescription(data.answer);
+      await pc.setRemoteDescription(remoteDesc);
+      console.log(`[${data.from}] Answer 수신 및 RemoteDescription 설정 완료.`);
+      // Process queued ICE candidates for this viewer
+      const queue = iceCandidateQueues.get(data.from);
+      if (queue) {
+        queue.forEach(candidate => pc.addIceCandidate(candidate));
+        iceCandidateQueues.set(data.from, []); // Clear the queue
+      }
+    }
+
+    async function handleCandidate(data) {
+      const pc = peerConnections.get(data.from);
+      if (pc) {
+        const candidate = new RTCIceCandidate(data.candidate);
+        if (pc.remoteDescription && pc.remoteDescription.type) {
+          try {
+            await pc.addIceCandidate(candidate);
+            console.log(`[${data.from}] ICE candidate 추가 완료.`);
+          } catch (e) {
+            console.error(`[${data.from}] ICE candidate 추가 오류:`, e);
+          }
+        } else {
+          // Offer/Answer가 아직 오지 않았다면 큐에 저장
+          iceCandidateQueues.get(data.from).push(candidate);
+          console.log(`[${data.from}] ICE candidate 큐에 추가됨.`);
+        }
+      } else {
+        console.warn(`[${data.from}] PeerConnection이 없어 ICE candidate 무시.`);
+        // PeerConnection이 없으면 큐에 추가 (handleViewerJoined에서 PC 생성 후 처리)
+        if (!iceCandidateQueues.has(data.from)) {
+          iceCandidateQueues.set(data.from, []);
+        }
+        iceCandidateQueues.get(data.from).push(new RTCIceCandidate(data.candidate));
+      }
+    }
+
+    function handleViewerLeft(viewerId) {
+      if (peerConnections.has(viewerId)) {
+        peerConnections.get(viewerId).close();
+        peerConnections.delete(viewerId);
+        iceCandidateQueues.delete(viewerId);
+        console.log(`[${viewerId}] 수신자 연결 해제 및 PeerConnection 제거.`);
+      }
+      // updateViewerList(); // 수신자 나갈 때 목록 업데이트
+    }
+
+    // 스트림 관련 함수들 (기존 코드 유지)
+    // ... (initCamera, initAudioOnly, initCanvasStream, initScreenShare, initDataOnly, 
+    // stopCurrentStream, drawVideoToCanvas, drawAudioVisualization, drawCanvasAnimation, 
+    // drawScreenShareInfo, drawDataOnlyInfo, updateStreamStatus, updateButtonStates 함수들)
 
     // 원본 카메라 + 오디오 스트림
     async function initCamera() {
@@ -371,7 +607,6 @@
       if (currentMode !== "camera") {
         return;
       }
-      
       function draw() {
         if (currentMode === "camera" && localStream && hiddenVideo.srcObject) {
           if (hiddenVideo.readyState >= 2 && hiddenVideo.videoWidth > 0) {
@@ -402,10 +637,7 @@
       }
       try {
         stopCurrentStream();
-        localStream = await navigator.mediaDevices.getUserMedia({ 
-          audio: true, 
-          video: false 
-        });
+        localStream = await navigator.mediaDevices.getUserMedia({ audio: true, video: false });
         currentMode = "audio";
         updateStatus("🎤 오디오만 스트림 준비 완료", "status-connected");
         drawAudioVisualization();
@@ -449,10 +681,7 @@
       }
       try {
         stopCurrentStream();
-        localStream = await navigator.mediaDevices.getDisplayMedia({ 
-          video: true, 
-          audio: true 
-        });
+        localStream = await navigator.mediaDevices.getDisplayMedia({ video: true, audio: true });
         currentMode = "screen";
         updateStatus("🖥️ 화면 공유 스트림 준비 완료", "status-connected");
         drawScreenShareInfo();
@@ -466,7 +695,6 @@
           updateStatus("화면 공유 중단됨. 데이터 전용 모드로 전환합니다.", "status-warning");
           updateButtonStates(document.getElementById('dataOnlyBtn'));
         };
-
       } catch (error) {
         console.error("❌ 화면 공유 스트림 오류:", error);
         updateStatus("화면 공유 접근 실패", "status-disconnected");
@@ -489,6 +717,7 @@
       updateStreamStatus(true);
       // 데이터 전용 모드에서는 미디어 트랙을 제거하고 새로 연결된 PeerConnection에 DataChannel만 추가
       // 기존 PeerConnection들은 미디어 트랙이 없어도 유지될 수 있음
+      updateAllPeerConnectionsWithStream(); // Call this to ensure DataChannels are handled
     }
 
     // 현재 스트림 정지 및 캔버스 초기화
@@ -505,376 +734,225 @@
       hiddenVideo.srcObject = null;
       hiddenVideo.onloadedmetadata = null;
       hiddenVideo.onplay = null;
-      
       ctx.fillStyle = '#000';
       ctx.fillRect(0, 0, testCanvas.width, testCanvas.height);
-      ctx.fillStyle = 'white';
-      ctx.font = '20px Arial';
-      ctx.textAlign = 'center';
-      ctx.fillText('스트림이 시작되지 않았습니다', testCanvas.width/2, testCanvas.height/2);
-      updateStreamStatus(false);
     }
 
-    // 캔버스 애니메이션
-    function drawCanvasAnimation() {
-      let hue = 0;
-      function draw() {
-        if (currentMode === "canvas") {
-          ctx.fillStyle = `hsl(${hue}, 70%, 50%)`;
-          ctx.fillRect(0, 0, testCanvas.width, testCanvas.height);
-          
-          ctx.fillStyle = 'white';
-          ctx.font = '48px Arial';
-          ctx.textAlign = 'center';
-          ctx.fillText('TEST VIDEO', testCanvas.width/2, testCanvas.height/2);
-          
-          ctx.font = '24px Arial';
-          ctx.fillText(new Date().toLocaleTimeString(), testCanvas.width/2, testCanvas.height/2 + 60);
-          
-          hue = (hue + 1) % 360;
-          animationId = requestAnimationFrame(draw);
-        }
-      }
-      draw();
-    }
-
-    // 오디오 시각화 캔버스
-    function drawAudioVisualization() {
-      ctx.fillStyle = '#2c3e50';
-      ctx.fillRect(0, 0, testCanvas.width, testCanvas.height);
-      
-      ctx.fillStyle = 'white';
-      ctx.font = '36px Arial';
-      ctx.textAlign = 'center';
-      ctx.fillText('🎤 오디오 전용 모드', testCanvas.width/2, testCanvas.height/2);
-      
-      ctx.font = '20px Arial';
-      ctx.fillText('마이크 입력이 전송됩니다', testCanvas.width/2, testCanvas.height/2 + 50);
-    }
-
-    // 화면 공유 정보 캔버스
-    function drawScreenShareInfo() {
-      ctx.fillStyle = '#34495e';
-      ctx.fillRect(0, 0, testCanvas.width, testCanvas.height);
-      
-      ctx.fillStyle = 'white';
-      ctx.font = '36px Arial';
-      ctx.textAlign = 'center';
-      ctx.fillText('🖥️ 화면 공유 활성화', testCanvas.width/2, testCanvas.height/2);
-      
-      ctx.font = '20px Arial';
-      ctx.fillText('선택한 화면이 전송됩니다', testCanvas.width/2, testCanvas.height/2 + 50);
-    }
-
-    // 데이터 전용 정보 캔버스
-    function drawDataOnlyInfo() {
-      ctx.fillStyle = '#27ae60';
-      ctx.fillRect(0, 0, testCanvas.width, testCanvas.height);
-      
-      ctx.fillStyle = 'white';
-      ctx.font = '36px Arial';
-      ctx.textAlign = 'center';
-      ctx.fillText('📊 WebRTC 연결 테스트', testCanvas.width/2, testCanvas.height/2);
-      
-      ctx.font = '20px Arial';
-      ctx.fillText('미디어 없이 연결만 테스트', testCanvas.width/2, testCanvas.height/2 + 50);
-    }
-
-    // 새 뷰어 접속 처리
-    async function handleViewerJoined(viewerId) {
-      console.log(`👀 새 뷰어 접속: ${viewerId}`);
-      
-      const pc = createPeerConnection(viewerId);
-      
-      // 스트림이 준비된 경우에만 트랙 추가
-      if (localStream) {
-        localStream.getTracks().forEach(track => {
-          pc.addTrack(track, localStream);
-          console.log(`트랙 추가됨: ${track.kind}`);
-        });
-      } else {
-        console.warn(`⚠️ 경고: 스트림이 아직 준비되지 않아 ${viewerId}에게 미디어를 보낼 수 없습니다.`);
-      }
-
-      try {
-        const offer = await pc.createOffer();
-        await pc.setLocalDescription(offer);
-
-        ws.send(JSON.stringify({
-          type: "offer",
-          from: senderId,
-          to: viewerId,
-          sdp: offer,
-          roomId: selectedRoomId // 방 ID 포함
-        }));
-        
-        console.log(`📤 Offer 전송: ${viewerId}`);
-      } catch (error) {
-        console.error(`❌ Offer 생성 실패 (${viewerId}):`, error);
-      }
-    }
-
-    // Answer 처리
-    async function handleAnswer(data) {
-      const pc = peerConnections.get(data.from);
-      if (!pc) {
-        console.warn(`⚠️ PeerConnection 없음: ${data.from}`);
-        return;
-      }
-
-      try {
-        await pc.setRemoteDescription(data.sdp);
-        console.log(`✅ Answer 처리 완료: ${data.from}`);
-
-        const queue = iceCandidateQueues.get(data.from);
-        if (queue) {
-          for (const candidate of queue) {
-            try {
-              await pc.addIceCandidate(candidate);
-              console.log(`✅ 큐에 있던 ICE Candidate 추가: ${data.from}`);
-            } catch (e) {
-              console.warn(`⚠️ 큐에 있던 ICE Candidate 추가 실패 (${data.from}):`, e);
-            }
-          }
-          iceCandidateQueues.delete(data.from);
-        }
-      } catch (error) {
-        console.error(`❌ Answer 처리 실패 (${data.from}):`, error);
-      }
-    }
-
-    // ICE Candidate 처리
-    async function handleCandidate(data) {
-      const pc = peerConnections.get(data.from);
-      if (!pc) {
-        console.warn(`⚠️ PeerConnection 없음: ${data.from}`);
-        return;
-      }
-
-      // remoteDescription이 설정되기 전에 candidate가 도착할 수 있으므로 큐에 저장
-      if (!pc.remoteDescription || !pc.remoteDescription.type) {
-        let queue = iceCandidateQueues.get(data.from);
-        if (!queue) {
-          queue = [];
-          iceCandidateQueues.set(data.from, queue);
-        }
-        queue.push(data.candidate);
-        console.log(`🧊 ICE Candidate 큐에 저장: ${data.from}`);
-        return;
-      }
-
-      try {
-        await pc.addIceCandidate(data.candidate);
-        console.log(`✅ ICE Candidate 추가: ${data.from}`);
-      } catch (error) {
-        console.warn(`⚠️ ICE Candidate 추가 실패 (${data.from}):`, error);
-      }
-    }
-
-    // 뷰어 연결 해제 처리
-    function handleViewerLeft(viewerId) {
-      const pc = peerConnections.get(viewerId);
-      if (pc) {
-        pc.close();
-        peerConnections.delete(viewerId);
-        iceCandidateQueues.delete(viewerId); // 큐도 함께 정리
-        console.log(`👋 뷰어 연결 해제: ${viewerId}`);
-      }
-    }
-
-    // PeerConnection 생성
-    function createPeerConnection(viewerId) {
-      const pc = new RTCPeerConnection({
-        iceServers: [
-          { urls: "stun:stun.l.google.com:19302" },
-          { urls: "stun:stun1.l.google.com:19302" }
-        ]
-      });
-
-      peerConnections.set(viewerId, pc);
-      iceCandidateQueues.set(viewerId, []); // 각 피어 연결별 ICE 큐 생성
-
-      // 데이터 채널 생성 (항상)
-      const dataChannel = pc.createDataChannel('chatChannel'); // 데이터 채널 이름 명확히
-      dataChannel.onopen = () => {
-        console.log(`✅ 데이터 채널 열림: ${viewerId}`);
-        // dataChannel.send(`Hello from sender to ${viewerId}!`); // 테스트 메시지
-      };
-      dataChannel.onmessage = (event) => {
-        console.log(`📨 데이터 채널 메시지 (${viewerId}):`, event.data);
-        // 여기서 받은 메시지를 UI에 표시할 수도 있습니다.
-      };
-      dataChannel.onclose = () => {
-        console.log(`❌ 데이터 채널 닫힘: ${viewerId}`);
-      };
-      dataChannel.onerror = (error) => {
-        console.error(`🚨 데이터 채널 오류 (${viewerId}):`, error);
-      };
-
-      // ICE Candidate 처리
-      pc.onicecandidate = (event) => {
-        if (event.candidate) {
-          ws.send(JSON.stringify({
-            type: "candidate",
-            from: senderId,
-            to: viewerId,
-            candidate: event.candidate,
-            roomId: selectedRoomId // 방 ID 포함
-          }));
-          console.log(`🧊 ICE Candidate 전송: ${viewerId}`);
-        }
-      };
-
-      // 연결 상태 모니터링
-      pc.onconnectionstatechange = () => {
-        console.log(`🔗 연결 상태 (${viewerId}): ${pc.connectionState}`);
-        if (pc.connectionState === 'connected') {
-          console.log(`✅ ${viewerId}와 WebRTC 연결 성공!`);
-          // 특정 뷰어와의 연결 성공을 시각적으로 알릴 수 있습니다.
-        } else if (pc.connectionState === 'disconnected' || pc.connectionState === 'failed' || pc.connectionState === 'closed') {
-          console.log(`⚠️ ${viewerId}와의 WebRTC 연결 끊어짐: ${pc.connectionState}`);
-          handleViewerLeft(viewerId); // 연결이 끊어지면 뷰어 목록에서 제거
-        }
-      };
-
-      pc.oniceconnectionstatechange = () => {
-        console.log(`🧊 ICE 상태 (${viewerId}): ${pc.iceConnectionState}`);
-      };
-
-      return pc;
-    }
-
-    // 스트림 변경 시 모든 PeerConnection에 트랙 업데이트
-    function updateAllPeerConnectionsWithStream() {
+    // 모든 PeerConnection에 현재 localStream의 트랙을 추가하거나 제거
+    async function updateAllPeerConnectionsWithStream() {
+      // 기존 트랙 제거
       peerConnections.forEach(pc => {
-        // 기존 트랙 제거
         pc.getSenders().forEach(sender => {
           if (sender.track) {
             pc.removeTrack(sender);
           }
         });
-        // 새 스트림의 트랙 추가
-        if (localStream) {
+      });
+
+      // 새 트랙 추가
+      if (localStream) {
+        peerConnections.forEach(pc => {
           localStream.getTracks().forEach(track => {
             pc.addTrack(track, localStream);
           });
-        }
-      });
-      // 모든 PeerConnection에 대해 다시 Offer/Answer 협상 필요 (Renegotiation)
-      // 실제 앱에서는 onnegotiationneeded 이벤트를 사용하여 자동으로 처리하는 것이 일반적입니다.
-      // 여기서는 간단화를 위해 트랙 추가 후 바로 Offer를 생성하도록 함
-      peerConnections.forEach(async (pc, viewerId) => {
-        if (pc.signalingState === "stable") { // 이미 Offer/Answer 교환이 진행 중이지 않을 때만
+        });
+        console.log("새 스트림 트랙이 모든 PeerConnection에 추가되었습니다.");
+      } else {
+          console.log("로컬 스트림이 없어 모든 PeerConnection에서 트랙을 제거했습니다.");
+      }
+       // Offers might need to be renegotiated after track changes
+       peerConnections.forEach(async (pc, viewerId) => {
             try {
                 const offer = await pc.createOffer();
                 await pc.setLocalDescription(offer);
-                ws.send(JSON.stringify({
-                    type: "offer",
-                    from: senderId,
-                    to: viewerId,
-                    sdp: offer,
-                    roomId: selectedRoomId
-                }));
-                console.log(`📤 새로운 Offer 전송 (스트림 변경): ${viewerId}`);
+                ws.send(
+                    JSON.stringify({
+                        type: "offer",
+                        offer: pc.localDescription,
+                        to: viewerId,
+                        from: senderId,
+                        roomId: selectedRoomId,
+                    })
+                );
+                console.log(`[${viewerId}] Offer (트랙 변경) 전송 완료.`);
             } catch (error) {
-                console.error(`❌ 스트림 변경 후 Offer 생성 실패 (${viewerId}):`, error);
+                console.error(`[${viewerId}] Offer 생성 또는 전송 실패 (트랙 변경):`, error);
+            }
+        });
+    }
+
+// 스트림 상태 업데이트 (UI)
+function updateStreamStatus(active) {
+    isStreamActive = active;
+    const streamButtons = document.querySelectorAll("#streamOptions button");
+
+    // 1. 모든 스트림 버튼에서 'active' 클래스를 한 번에 제거하여 초기화합니다.
+    streamButtons.forEach(button => {
+        button.classList.remove("active");
+    });
+
+    if (active) { // 스트림이 현재 활성화된 경우 (카메라, 오디오, 캔버스, 화면 공유 등)
+        if (currentMode === "data") {
+            // 데이터 전용 모드일 경우 'dataOnlyBtn'만 활성화
+            const dataOnlyButton = document.getElementById("dataOnlyBtn");
+            if (dataOnlyButton) { // ✅ 요소가 존재하는지 방어적 확인
+                dataOnlyButton.classList.add("active");
+            }
+        } else {
+            // 그 외 스트림 (카메라, 화면 공유 등)은 해당 'currentMode'에 맞는 버튼을 활성화
+            const activeButton = document.getElementById(`${currentMode}Btn`);
+            if (activeButton) { // ✅ 요소가 존재하는지 방어적 확인
+                activeButton.classList.add("active");
             }
         }
-      });
+        sendBtn.disabled = false; // 스트림이 활성화되면 채팅도 가능
+    } else { // 스트림이 비활성화된 경우 (연결 끊김, 중단 등)
+        // 모든 버튼에서 active 클래스는 이미 위에서 제거되었으므로 추가 작업 불필요
+        sendBtn.disabled = true; // 채팅 기능 비활성화
     }
 
-    // 채팅 메시지 추가
-    function appendChatMessage(sender, message) {
-      const div = document.createElement("div");
-      div.style.marginBottom = "5px";
-      div.innerHTML = `<strong>${escapeHtml(sender)}:</strong> ${escapeHtml(message)}`;
-      chatLog.appendChild(div);
-      chatLog.scrollTop = chatLog.scrollHeight;
+    // 디버깅을 위한 경고 메시지 (currentMode가 예상대로 설정되지 않았을 경우)
+    if (!currentMode) {
+        console.warn("경고: currentMode가 설정되지 않았습니다. updateStreamStatus 함수가 예상대로 작동하지 않을 수 있습니다.");
     }
+}
 
-    // 시스템 메시지 추가
-    function appendSystemMessage(message) {
-      const div = document.createElement("div");
-      div.style.marginBottom = "5px";
-      div.style.fontStyle = "italic";
-      div.style.color = "#6c757d";
-      div.innerHTML = `<em>${escapeHtml(message)}</em>`;
-      chatLog.appendChild(div);
-      chatLog.scrollTop = chatLog.scrollHeight;
-    }
-
-    // 채팅 전송
-    function sendChat() {
-      const message = chatInput.value.trim();
-      if (!message || !isWsConnected || !selectedRoomId) return;
-
-      ws.send(JSON.stringify({ 
-        type: "chat", 
-        from: senderId, 
-        message: message,
-        roomId: selectedRoomId 
-      }));
-      
-      appendChatMessage("나", message);
-      chatInput.value = "";
-    }
-
-    // 상태 업데이트
-    function updateStatus(message, className) {
-      status.textContent = message;
-      status.className = `status ${className}`;
-    }
-
-    // 스트림 활성화 상태 업데이트
-    function updateStreamStatus(isActive) {
-        isStreamActive = isActive;
-        if (isActive) {
-            sendBtn.disabled = false; // 스트림이 활성화되면 채팅도 가능
-        } else {
-            // 스트림이 없으면 미디어 관련 연결은 안되지만, 채팅은 가능하게 할 수도 있습니다.
-            // 여기서는 스트림이 있어야만 채팅 가능하도록 유지합니다.
-            sendBtn.disabled = true; 
-        }
-    }
-
-    // HTML 이스케이프
-    function escapeHtml(text) {
-      const div = document.createElement('div');
-      div.textContent = text;
-      return div.innerHTML;
-    }
-
-    // 버튼 활성화 상태 업데이트
+    // 버튼 상태 업데이트 (CSS active 클래스)
     function updateButtonStates(activeButton) {
-      document.querySelectorAll('#streamOptions button').forEach(btn => {
-        btn.classList.remove('active');
+      const buttons = document.querySelectorAll("#streamOptions button");
+      buttons.forEach(button => {
+        button.classList.remove("active");
       });
       if (activeButton) {
-        activeButton.classList.add('active');
+        activeButton.classList.add("active");
       }
     }
 
-    // 접속 중인 뷰어 목록 업데이트
-    function updateViewerList(members) {
+    // 캔버스 애니메이션
+    function drawCanvasAnimation() {
+      const centerX = testCanvas.width / 2;
+      const centerY = testCanvas.height / 2;
+      const radius = Math.min(centerX, centerY) * 0.4;
+      let angle = 0;
+
+      function animate() {
+        ctx.clearRect(0, 0, testCanvas.width, testCanvas.height);
+        ctx.fillStyle = '#f0f0f0';
+        ctx.fillRect(0, 0, testCanvas.width, testCanvas.height);
+
+        ctx.beginPath();
+        ctx.arc(centerX + Math.cos(angle) * radius, centerY + Math.sin(angle) * radius, 30, 0, Math.PI * 2);
+        ctx.fillStyle = '#3498db';
+        ctx.fill();
+
+        ctx.beginPath();
+        ctx.arc(centerX + Math.cos(angle + Math.PI) * radius, centerY + Math.sin(angle + Math.PI) * radius, 30, 0, Math.PI * 2);
+        ctx.fillStyle = '#e74c3c';
+        ctx.fill();
+
+        angle += 0.05;
+        if (currentMode === "canvas") {
+            animationId = requestAnimationFrame(animate);
+        }
+      }
+      animate();
+    }
+
+    // 오디오 시각화 (임시)
+    function drawAudioVisualization() {
+      ctx.clearRect(0, 0, testCanvas.width, testCanvas.height);
+      ctx.fillStyle = '#f0f0f0';
+      ctx.fillRect(0, 0, testCanvas.width, testCanvas.height);
+      ctx.fillStyle = '#2ecc71';
+      ctx.font = '24px Arial';
+      ctx.textAlign = 'center';
+      ctx.fillText('🎤 오디오 스트림 중...', testCanvas.width / 2, testCanvas.height / 2);
+    }
+
+    // 화면 공유 정보
+    function drawScreenShareInfo() {
+      ctx.clearRect(0, 0, testCanvas.width, testCanvas.height);
+      ctx.fillStyle = '#f0f0f0';
+      ctx.fillRect(0, 0, testCanvas.width, testCanvas.height);
+      ctx.fillStyle = '#e67e22';
+      ctx.font = '24px Arial';
+      ctx.textAlign = 'center';
+      ctx.fillText('🖥️ 화면 공유 중...', testCanvas.width / 2, testCanvas.height / 2);
+    }
+
+    // 데이터 전용 정보
+    function drawDataOnlyInfo() {
+      ctx.clearRect(0, 0, testCanvas.width, testCanvas.height);
+      ctx.fillStyle = '#f0f0f0';
+      ctx.fillRect(0, 0, testCanvas.width, testCanvas.height);
+      ctx.fillStyle = '#34495e';
+      ctx.font = '24px Arial';
+      ctx.textAlign = 'center';
+      ctx.fillText('📊 데이터 전용 모드', testCanvas.width / 2, testCanvas.height / 2);
+    }
+
+    // UI 상태 업데이트 함수
+    function updateStatus(message, className) {
+      status.textContent = message;
+      status.className = "status " + className;
+    }
+
+    function appendChatMessage(from, message, isFan = false) { // Add isFan parameter
+      const chatMessageElem = document.createElement("div");
+      chatMessageElem.classList.add("chat-message");
+      let senderText = from;
+      if (isFan) {
+          senderText = `[팬]${from}`; // Prepend [팬] if fan
+          chatMessageElem.classList.add("fan"); // Add class for fan styling
+      }
+      chatMessageElem.innerHTML = `<strong>${senderText}:</strong> ${message}`;
+      chatLog.appendChild(chatMessageElem);
+      chatLog.scrollTop = chatLog.scrollHeight; // 스크롤을 항상 최하단으로
+    }
+
+    function appendSystemMessage(message) {
+      const systemMessageElem = document.createElement("div");
+      systemMessageElem.classList.add("system-message");
+      systemMessageElem.textContent = message;
+      chatLog.appendChild(systemMessageElem);
+      chatLog.scrollTop = chatLog.scrollHeight;
+    }
+
+    function updateViewerList(members, senderNicknameFromServer) { // Add senderNicknameFromServer
       activeViewersList.innerHTML = '';
       viewerCountDisplay.textContent = members.length;
-      if (members.length === 0) {
-        const li = document.createElement("li");
-        li.textContent = "아직 접속 중인 수신자가 없습니다.";
-        activeViewersList.appendChild(li);
-      } else {
-        members.forEach(viewerId => {
-          const li = document.createElement("li");
-          li.textContent = viewerId;
-          activeViewersList.appendChild(li);
-        });
+
+      // Update sender's nickname display if it came from server
+      if (senderNicknameFromServer && senderNicknameFromServer !== currentSenderNickname) {
+        currentSenderNickname = senderNicknameFromServer;
+        senderNicknameInput.value = currentSenderNickname;
+        localStorage.setItem('senderNickname', currentSenderNickname);
+        appendSystemMessage(`📝 송신자의 닉네임이 "${currentSenderNickname}"으로 업데이트되었습니다.`);
       }
+
+      // Add sender to the list (always first)
+      const senderLi = document.createElement("li");
+      senderLi.textContent = `🎥 ${currentSenderNickname} (나, 송신자)`;
+      activeViewersList.appendChild(senderLi);
+
+      members.forEach(member => {
+          const li = document.createElement("li");
+          let displayName = member.nickname;
+          if (member.isFan) {
+              displayName = `[팬]${member.nickname}`;
+              li.classList.add("fan"); // Add class for fan styling
+          }
+          // Only list other viewers, not self (sender)
+          if (member.viewerId !== senderId) { // assuming senderId is unique and not used by viewers
+            li.textContent = displayName;
+            li.classList.add("viewer-item"); // Add a class for all viewer items
+            activeViewersList.appendChild(li);
+          }
+      });
     }
 
-    // 초기 캔버스 상태 설정
-    stopCurrentStream();
 
-    // 이벤트 리스너
+    // 이벤트 리스너 (기존 코드 유지)
     document.getElementById('cameraBtn').addEventListener('click', () => {
       initCamera();
       updateButtonStates(document.getElementById('cameraBtn'));
@@ -900,11 +978,23 @@
       updateButtonStates(document.getElementById('dataOnlyBtn'));
     });
 
-    sendBtn.addEventListener("click", sendChat);
+    sendBtn.addEventListener("click", () => {
+      if (selectedRoomId) {
+        const message = chatInput.value.trim();
+        if (message) {
+          // Sender sends message with its own nickname
+          ws.send(JSON.stringify({ type: "chat", message: message, roomId: selectedRoomId, from: currentSenderNickname, isFan: false }));
+          // Local echo for immediate feedback
+          // appendChatMessage(currentSenderNickname, message, false); // Sender is not a fan
+          chatInput.value = "";
+        }
+      }
+    });
+
     chatInput.addEventListener("keydown", (e) => {
       if (e.key === "Enter") {
         e.preventDefault();
-        sendChat();
+        sendBtn.click();
       }
     });
 
@@ -916,9 +1006,8 @@
     });
 
     // 초기 상태 설정
-    sendBtn.disabled = true; // 방 설정 전에는 채팅 비활성화
-    setRoomBtn.disabled = true; // WebSocket 연결 전에는 방 설정 비활성화
-
+    sendBtn.disabled = true; // 방 설정 전까지 전송 버튼 비활성화
+    updateButtonStates(null); // 모든 스트림 버튼 비활성화
   </script>
 </body>
 </html>

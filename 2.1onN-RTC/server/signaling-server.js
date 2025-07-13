@@ -2,9 +2,9 @@
 const WebSocket = require("ws");
 
 const wss = new WebSocket.Server({ port: 8080 });
-console.log("✅ 시그널링 서버 실행 중 (ws://192.168.0.63:8080)");
+console.log("✅ 시그널링 서버 실행 중 (ws://192.168.0.238:8080)");
 
-// rooms: Map<roomId, { sender: WebSocket, viewers: Map<viewerId, WebSocket> }>
+// rooms: Map<roomId, { sender: { ws: WebSocket, nickname: string }, viewers: Map<viewerId, { ws: WebSocket, nickname: string, isFan: boolean }> }>
 const rooms = new Map();
 
 wss.on("connection", (ws) => {
@@ -19,42 +19,45 @@ wss.on("connection", (ws) => {
           rooms.set(roomId, { sender: null, viewers: new Map() });
         }
         const room = rooms.get(roomId);
-        room.sender = ws;
+        room.sender = { ws: ws, nickname: data.nickname || "송신자" }; // Store sender's WebSocket and nickname
         ws.role = "sender";
         ws.roomId = roomId;
-        console.log(`🎥 송신자 연결됨 (방: ${roomId})`);
+        ws.nickname = data.nickname || "송신자"; // Attach nickname to ws object
+        console.log(`🎥 송신자 연결됨 (방: ${roomId}, 닉네임: ${ws.nickname})`);
 
         // Notify existing viewers in the room that the sender is available
-        room.viewers.forEach((viewerWs, viewerId) => {
-          if (viewerWs.readyState === WebSocket.OPEN) {
-            viewerWs.send(JSON.stringify({ type: "sender-available", roomId: roomId }));
-            // Also send existing viewers' info to the new sender
-            if (room.sender && room.sender.readyState === WebSocket.OPEN) {
-              room.sender.send(JSON.stringify({ type: "viewer-joined", viewerId: viewerId }));
-            }
+        room.viewers.forEach((viewer) => {
+          if (viewer.ws.readyState === WebSocket.OPEN) {
+            viewer.ws.send(JSON.stringify({ type: "sender-available", roomId: roomId, senderNickname: ws.nickname }));
           }
         });
-        
+
         // Send initial room member list to the sender
         sendRoomMembersToSender(roomId);
 
       } else if (data.type === "enterRoom") {
         const roomId = data.roomId;
+        const viewerId = data.viewerId;
+        const nickname = data.nickname || "익명";
+        const isFan = data.isFan || false; // New: Receive isFan status from viewer
+
         if (!rooms.has(roomId)) {
-          // If room doesn't exist, create it but without a sender initially
           rooms.set(roomId, { sender: null, viewers: new Map() });
         }
         const room = rooms.get(roomId);
 
         ws.role = "viewer";
-        ws.viewerId = data.viewerId;
+        ws.viewerId = viewerId;
         ws.roomId = roomId;
-        room.viewers.set(data.viewerId, ws);
-        console.log(`👀 수신자 연결됨 (ID: ${data.viewerId}, 방: ${roomId})`);
+        ws.nickname = nickname; // Attach nickname to ws object
+        ws.isFan = isFan; // Attach isFan status to ws object
+
+        room.viewers.set(viewerId, { ws: ws, nickname: nickname, isFan: isFan }); // Store viewer's WebSocket, nickname, and isFan status
+        console.log(`👀 수신자 연결됨 (ID: ${viewerId}, 방: ${roomId}, 닉네임: ${nickname}, 팬: ${isFan})`);
 
         // Notify the sender in that room about the new viewer
-        if (room.sender && room.sender.readyState === WebSocket.OPEN) {
-          room.sender.send(JSON.stringify({ type: "viewer-joined", viewerId: data.viewerId }));
+        if (room.sender && room.sender.ws.readyState === WebSocket.OPEN) {
+          room.sender.ws.send(JSON.stringify({ type: "viewer-joined", viewerId: viewerId, nickname: nickname, isFan: isFan }));
         } else {
           // If no sender in the room, notify viewer
           ws.send(JSON.stringify({ type: "no-sender-available", roomId: roomId }));
@@ -67,9 +70,9 @@ wss.on("connection", (ws) => {
         const room = rooms.get(ws.roomId);
         if (!room) return;
         // 송신자 -> 특정 수신자
-        const target = room.viewers.get(data.to);
-        if (target && target.readyState === WebSocket.OPEN) {
-          target.send(JSON.stringify(data));
+        const targetViewer = room.viewers.get(data.to);
+        if (targetViewer && targetViewer.ws.readyState === WebSocket.OPEN) {
+          targetViewer.ws.send(JSON.stringify(data));
           console.log(`📤 offer 전달: ${data.from} -> ${data.to} (방: ${ws.roomId})`);
         }
 
@@ -77,8 +80,8 @@ wss.on("connection", (ws) => {
         const room = rooms.get(ws.roomId);
         if (!room) return;
         // 수신자 -> 송신자
-        if (room.sender && room.sender.readyState === WebSocket.OPEN) {
-          room.sender.send(JSON.stringify(data));
+        if (room.sender && room.sender.ws.readyState === WebSocket.OPEN) {
+          room.sender.ws.send(JSON.stringify(data));
           console.log(`📤 answer 전달: ${data.from} -> sender (방: ${ws.roomId})`);
         }
 
@@ -89,10 +92,10 @@ wss.on("connection", (ws) => {
         let target = null;
         if (ws.role === "sender") {
           target = room.viewers.get(data.to);
+          if (target) target = target.ws; // Get the WebSocket object
         } else if (ws.role === "viewer") {
-          target = room.sender;
+          target = room.sender ? room.sender.ws : null; // Get the WebSocket object
         }
-
         if (target && target.readyState === WebSocket.OPEN) {
           target.send(JSON.stringify(data));
           console.log(`📤 candidate 전달: ${data.from} -> ${data.to || 'sender'} (방: ${ws.roomId})`);
@@ -101,90 +104,232 @@ wss.on("connection", (ws) => {
       } else if (data.type === "chat") {
         const room = rooms.get(ws.roomId);
         if (!room) return;
+
+        let senderNickname = ws.nickname;
+        let isSenderFan = ws.isFan || false; // Senders generally aren't "fans" of themselves, but for consistency
+
         // 채팅 메시지 처리
         if (ws.role === "sender") {
           // 송신자 -> 모든 수신자
-          room.viewers.forEach((viewerWs) => {
-            if (viewerWs.readyState === WebSocket.OPEN) {
-              viewerWs.send(JSON.stringify({
+          room.viewers.forEach((viewer) => {
+            if (viewer.ws.readyState === WebSocket.OPEN) {
+              viewer.ws.send(JSON.stringify({
                 type: "chat",
                 message: data.message,
-                from: "송신자"
+                from: senderNickname, // Use sender's nickname
+                fromId: ws.viewerId || 'sender', // Use a consistent ID
+                isFan: false // Sender is not a fan
               }));
             }
           });
-          console.log(`💬 송신자 채팅 브로드캐스트 (방: ${ws.roomId}): ${data.message}`);
-
+          // Send to sender's own chat log as well for consistency
+          ws.send(JSON.stringify({
+            type: "chat",
+            message: data.message,
+            from: senderNickname,
+            fromId: 'sender',
+            isFan: false
+          }));
+          console.log(`💬 송신자 채팅 브로드캐스트 (방: ${ws.roomId}, 닉네임: ${senderNickname}): ${data.message}`);
         } else if (ws.role === "viewer") {
-          const senderName = data.from || ws.viewerId;
+          const viewerInfo = room.viewers.get(ws.viewerId);
+          senderNickname = viewerInfo ? viewerInfo.nickname : ws.viewerId; // Use viewer's nickname
+          isSenderFan = viewerInfo ? viewerInfo.isFan : false; // Use viewer's fan status
 
-          // 수신자 -> 송신자
-          if (room.sender && room.sender.readyState === WebSocket.OPEN) {
-            room.sender.send(JSON.stringify({
+          // 수신자 -> 송신자 및 다른 수신자
+          if (room.sender && room.sender.ws.readyState === WebSocket.OPEN) {
+            room.sender.ws.send(JSON.stringify({
               type: "chat",
               message: data.message,
-              from: senderName
+              from: senderNickname,
+              fromId: ws.viewerId,
+              isFan: isSenderFan
             }));
           }
-
-          // 수신자 -> 다른 수신자들
-          room.viewers.forEach((viewerWs) => {
-            if (viewerWs !== ws && viewerWs.readyState === WebSocket.OPEN) {
-              viewerWs.send(JSON.stringify({
+          room.viewers.forEach((viewer) => {
+            if (viewer.ws !== ws && viewer.ws.readyState === WebSocket.OPEN) { // Exclude sender
+              viewer.ws.send(JSON.stringify({
                 type: "chat",
                 message: data.message,
-                from: senderName
+                from: senderNickname,
+                fromId: ws.viewerId,
+                isFan: isSenderFan
               }));
             }
           });
-          console.log(`💬 수신자 채팅 전달 (방: ${ws.roomId}): ${senderName}: ${data.message}`);
+          // Send to sender's own chat log
+          ws.send(JSON.stringify({
+            type: "chat",
+            message: data.message,
+            from: senderNickname,
+            fromId: ws.viewerId,
+            isFan: isSenderFan
+          }));
+          console.log(`💬 수신자 채팅 브로드캐스트 (방: ${ws.roomId}, ID: ${ws.viewerId}, 닉네임: ${senderNickname}, 팬: ${isSenderFan}): ${data.message}`);
         }
-      } else if (data.type === "like" || data.type === "star-balloon" || data.type === "nickname-change") {
+
+      } else if (data.type === "like") {
         const room = rooms.get(ws.roomId);
         if (!room) return;
-        // Forward likes, star-balloons, and nickname changes to sender and other viewers
-        if (room.sender && room.sender.readyState === WebSocket.OPEN) {
-          room.sender.send(JSON.stringify(data));
+        const likerNickname = ws.nickname || ws.viewerId;
+        const likerIsFan = ws.isFan || false;
+        // Broadcast to sender
+        if (room.sender && room.sender.ws.readyState === WebSocket.OPEN) {
+          room.sender.ws.send(JSON.stringify({ type: "like", from: likerNickname, fromId: ws.viewerId, isFan: likerIsFan }));
         }
-        room.viewers.forEach((viewerWs) => {
-          if (viewerWs.readyState === WebSocket.OPEN && viewerWs !== ws) { // Don't send back to self
-            viewerWs.send(JSON.stringify(data));
+        // Broadcast to other viewers
+        room.viewers.forEach((viewer) => {
+          if (viewer.ws !== ws && viewer.ws.readyState === WebSocket.OPEN) {
+            viewer.ws.send(JSON.stringify({ type: "like", from: likerNickname, fromId: ws.viewerId, isFan: likerIsFan }));
           }
         });
+        console.log(`❤️ 좋아요 수신 및 브로드캐스트 (방: ${ws.roomId}, From: ${likerNickname})`);
+
+      } else if (data.type === "star-balloon") {
+        const room = rooms.get(ws.roomId);
+        if (!room) return;
+        const giverNickname = ws.nickname || ws.viewerId;
+        const giverIsFan = ws.isFan || false;
+        // Broadcast to sender
+        if (room.sender && room.sender.ws.readyState === WebSocket.OPEN) {
+          room.sender.ws.send(JSON.stringify({ type: "star-balloon", from: giverNickname, count: data.count, fromId: ws.viewerId, isFan: giverIsFan }));
+        }
+        // Broadcast to other viewers
+        room.viewers.forEach((viewer) => {
+          if (viewer.ws !== ws && viewer.ws.readyState === WebSocket.OPEN) {
+            viewer.ws.send(JSON.stringify({ type: "star-balloon", from: giverNickname, count: data.count, fromId: ws.viewerId, isFan: giverIsFan }));
+          }
+          console.log(`⭐ 별풍선 수신 및 브로드캐스트 (방: ${ws.roomId}, From: ${giverNickname}, Count: ${data.count})`);
+        });
+
+      } else if (data.type === "nickname-change") {
+        const room = rooms.get(ws.roomId);
+        if (!room) return;
+        const oldNickname = ws.nickname;
+        const newNickname = data.newNickname;
+        ws.nickname = newNickname; // Update nickname on ws object
+
+        if (ws.role === "viewer") {
+          const viewerInfo = room.viewers.get(ws.viewerId);
+          if (viewerInfo) viewerInfo.nickname = newNickname; // Update nickname in room data
+        } else if (ws.role === "sender") {
+          if (room.sender) room.sender.nickname = newNickname; // Update sender's nickname in room data
+        }
+
+        // Broadcast nickname change to all in the room
+        if (room.sender && room.sender.ws.readyState === WebSocket.OPEN) {
+          room.sender.ws.send(JSON.stringify({ type: "nickname-change", viewerId: ws.viewerId, oldNickname: oldNickname, newNickname: newNickname, isFan: ws.isFan || false }));
+        }
+        room.viewers.forEach((viewer) => {
+          if (viewer.ws.readyState === WebSocket.OPEN) {
+            viewer.ws.send(JSON.stringify({ type: "nickname-change", viewerId: ws.viewerId, oldNickname: oldNickname, newNickname: newNickname, isFan: ws.isFan || false }));
+          }
+        });
+        console.log(`📝 닉네임 변경 브로드캐스트 (방: ${ws.roomId}, ID: ${ws.viewerId || 'sender'}, Old: ${oldNickname}, New: ${newNickname})`);
+        // After nickname change, broadcast updated room members
+        broadcastRoomMembers(ws.roomId);
+
+      } else if (data.type === "fan-membership") { // New: Handle fan membership
+        const room = rooms.get(ws.roomId);
+        if (!room) return;
+
+        if (ws.role === "viewer") {
+          const viewerInfo = room.viewers.get(ws.viewerId);
+          if (viewerInfo) {
+            viewerInfo.isFan = data.isFan; // Update fan status in room data
+            ws.isFan = data.isFan; // Update fan status on ws object
+            console.log(`💖 팬 가입 상태 변경 (방: ${ws.roomId}, ID: ${ws.viewerId}, 닉네임: ${ws.nickname}, 팬: ${ws.isFan})`);
+
+            // Broadcast fan status change to all in the room
+            if (room.sender && room.sender.ws.readyState === WebSocket.OPEN) {
+              room.sender.ws.send(JSON.stringify({
+                type: "fan-status-update",
+                viewerId: ws.viewerId,
+                nickname: ws.nickname,
+                isFan: ws.isFan
+              }));
+            }
+            room.viewers.forEach((viewer) => {
+              if (viewer.ws.readyState === WebSocket.OPEN) {
+                viewer.ws.send(JSON.stringify({
+                  type: "fan-status-update",
+                  viewerId: ws.viewerId,
+                  nickname: ws.nickname,
+                  isFan: ws.isFan
+                }));
+              }
+            });
+            // After fan status change, broadcast updated room members
+            broadcastRoomMembers(ws.roomId);
+          }
+        }
+      } else if (data.type === "sender-nickname-change") { // New: Handle sender nickname change
+        const room = rooms.get(ws.roomId);
+        if (!room || ws.role !== "sender") return;
+
+        const oldNickname = room.sender.nickname;
+        const newNickname = data.newNickname;
+        room.sender.nickname = newNickname; // Update sender's nickname in room data
+        ws.nickname = newNickname; // Update nickname on ws object
+
+        // Broadcast sender nickname change to all viewers
+        room.viewers.forEach((viewer) => {
+          if (viewer.ws.readyState === WebSocket.OPEN) {
+            viewer.ws.send(JSON.stringify({ type: "sender-nickname-change", oldNickname: oldNickname, newNickname: newNickname }));
+          }
+        });
+        console.log(`📝 송신자 닉네임 변경 브로드캐스트 (방: ${ws.roomId}, Old: ${oldNickname}, New: ${newNickname})`);
+        // After nickname change, broadcast updated room members (including sender's new nickname)
+        broadcastRoomMembers(ws.roomId);
       }
 
+      else {
+        console.warn("⚠️ 알 수 없는 메시지 타입:", data.type);
+      }
     } catch (error) {
       console.error("❌ 메시지 처리 오류:", error);
     }
   });
 
   ws.on("close", () => {
-    if (ws.role === "viewer" && ws.roomId && ws.viewerId) {
+    if (ws.roomId) {
       const room = rooms.get(ws.roomId);
       if (room) {
-        room.viewers.delete(ws.viewerId);
-        if (room.sender && room.sender.readyState === WebSocket.OPEN) {
-          room.sender.send(JSON.stringify({ type: "viewer-left", viewerId: ws.viewerId }));
-        }
-        console.log(`👋 수신자 연결 종료: ${ws.viewerId} (방: ${ws.roomId})`);
-        broadcastRoomMembers(ws.roomId); // Update room members list
-      }
-    } else if (ws.role === "sender" && ws.roomId) {
-      const room = rooms.get(ws.roomId);
-      if (room && room.sender === ws) {
-        room.sender = null; // Clear sender from the room
-        console.log(`❌ 송신자 연결 종료 (방: ${ws.roomId})`);
-
-        // Notify all viewers in the room that the sender has disconnected
-        room.viewers.forEach((viewerWs) => {
-          if (viewerWs.readyState === WebSocket.OPEN) {
-            viewerWs.send(JSON.stringify({ type: "sender-disconnected", roomId: ws.roomId }));
-            viewerWs.close(); // Optionally close viewer connections as well
+        if (ws.role === "sender") {
+          console.log(`📤 송신자 연결 해제 (방: ${ws.roomId})`);
+          room.sender = null;
+          // Notify all viewers in the room that the sender has left
+          room.viewers.forEach((viewer) => {
+            if (viewer.ws.readyState === WebSocket.OPEN) {
+              viewer.ws.send(JSON.stringify({ type: "sender-unavailable", roomId: ws.roomId }));
+            }
+          });
+          // Remove the room if sender is gone
+          if (room.viewers.size === 0) {
+            rooms.delete(ws.roomId);
+            console.log(`🗑️ 빈 방 삭제됨: ${ws.roomId}`);
           }
-        });
-        room.viewers.clear(); // Clear viewers for this room as sender is gone
-        rooms.delete(ws.roomId); // Remove the room if sender is gone
+        } else if (ws.role === "viewer" && ws.viewerId) {
+          console.log(`🏃 수신자 연결 해제 (ID: ${ws.viewerId}, 방: ${ws.roomId})`);
+          room.viewers.delete(ws.viewerId);
+          // Notify the sender in that room about the viewer leaving
+          if (room.sender && room.sender.ws.readyState === WebSocket.OPEN) {
+            room.sender.ws.send(JSON.stringify({ type: "viewer-left", viewerId: ws.viewerId }));
+          }
+          // Remove the room if sender is gone and no viewers left
+          if (room.sender === null && room.viewers.size === 0) {
+            rooms.delete(ws.roomId);
+            console.log(`🗑️ 빈 방 삭제됨: ${ws.roomId}`);
+          } else {
+            // Broadcast updated room members
+            broadcastRoomMembers(ws.roomId);
+          }
+        }
+      } else {
+        console.log(`ℹ️ 연결 해제된 클라이언트의 방 (${ws.roomId})을 찾을 수 없음.`);
       }
+    } else {
+      console.log("ℹ️ 연결 해제된 클라이언트 (방 정보 없음)");
     }
   });
 
@@ -198,39 +343,51 @@ function broadcastRoomMembers(roomId) {
   const room = rooms.get(roomId);
   if (!room) return;
 
-  const viewerIds = Array.from(room.viewers.keys());
+  const viewerList = Array.from(room.viewers.entries()).map(([viewerId, viewerInfo]) => ({
+    viewerId: viewerId,
+    nickname: viewerInfo.nickname,
+    isFan: viewerInfo.isFan
+  }));
+
   const memberList = {
     type: "room-members",
     roomId: roomId,
-    members: viewerIds,
-    senderAvailable: !!room.sender
+    members: viewerList, // Send rich viewer info
+    senderAvailable: !!room.sender,
+    senderNickname: room.sender ? room.sender.nickname : null // Send sender's nickname
   };
 
   // Send to sender if available
-  if (room.sender && room.sender.readyState === WebSocket.OPEN) {
-    room.sender.send(JSON.stringify(memberList));
+  if (room.sender && room.sender.ws.readyState === WebSocket.OPEN) {
+    room.sender.ws.send(JSON.stringify(memberList));
   }
   // Send to all viewers in the room
-  room.viewers.forEach((viewerWs) => {
-    if (viewerWs.readyState === WebSocket.OPEN) {
-      viewerWs.send(JSON.stringify(memberList));
+  room.viewers.forEach((viewer) => {
+    if (viewer.ws.readyState === WebSocket.OPEN) {
+      viewer.ws.send(JSON.stringify(memberList));
     }
   });
-  console.log(`👥 방 (${roomId}) 멤버 목록 브로드캐스트:`, viewerIds.length, "명");
+  console.log(`👥 방 (${roomId}) 멤버 목록 브로드캐스트:`, viewerList.length, "명", "송신자:", room.sender ? room.sender.nickname : "없음");
 }
 
 // Helper function to send room members to a specific sender
 function sendRoomMembersToSender(roomId) {
-    const room = rooms.get(roomId);
-    if (!room || !room.sender || room.sender.readyState !== WebSocket.OPEN) return;
+  const room = rooms.get(roomId);
+  if (!room || !room.sender || room.sender.ws.readyState !== WebSocket.OPEN) return;
 
-    const viewerIds = Array.from(room.viewers.keys());
-    const memberList = {
-        type: "room-members",
-        roomId: roomId,
-        members: viewerIds,
-        senderAvailable: !!room.sender
-    };
-    room.sender.send(JSON.stringify(memberList));
-    console.log(`👥 방 (${roomId}) 멤버 목록 송신자에게 전송:`, viewerIds.length, "명");
+  const viewerList = Array.from(room.viewers.entries()).map(([viewerId, viewerInfo]) => ({
+    viewerId: viewerId,
+    nickname: viewerInfo.nickname,
+    isFan: viewerInfo.isFan
+  }));
+
+  const memberList = {
+    type: "room-members",
+    roomId: roomId,
+    members: viewerList,
+    senderAvailable: true,
+    senderNickname: room.sender.nickname // Send sender's nickname
+  };
+  room.sender.ws.send(JSON.stringify(memberList));
+  console.log(`👥 방 (${roomId}) 멤버 목록을 송신자에게 전송:`, viewerList.length, "명");
 }
