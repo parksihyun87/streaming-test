@@ -108,7 +108,7 @@
       justify-content: center;
     }
 
-    .like-btn, .star-balloon-btn, .fan-membership-btn { /* Add fan-membership-btn */
+    .like-btn, .star-balloon-btn {
       color: white;
       border: none;
       padding: 12px 24px;
@@ -138,16 +138,7 @@
       transform: translateY(-3px) scale(1.02);
       box-shadow: 0 6px 20px rgba(255, 215, 0, 0.4);
     }
-
-    .fan-membership-btn { /* Style for fan membership button */
-      background: linear-gradient(45deg, #a855f7, #9333ea); /* Purple gradient */
-    }
-    .fan-membership-btn:hover {
-      transform: translateY(-3px) scale(1.02);
-      box-shadow: 0 6px 20px rgba(168, 85, 247, 0.4);
-    }
-
-    .star-balloon-btn:disabled, .like-btn:disabled, .fan-membership-btn:disabled { /* Disable style for fan button */
+    .star-balloon-btn:disabled, .like-btn:disabled {
       background: #cccccc;
       cursor: not-allowed;
       box-shadow: none;
@@ -175,9 +166,6 @@
     }
     .chat-message strong {
         color: #007bff;
-    }
-    .chat-message.fan strong { /* Style for fan's nickname in chat */
-        color: #9333ea; /* Purple for fan */
     }
 
     .system-message {
@@ -298,10 +286,6 @@
     #viewerList li:last-child {
       border-bottom: none;
     }
-    .viewer-item.fan { /* Style for fan in viewer list */
-        font-weight: bold;
-        color: #9333ea;
-    }
   </style>
 </head>
 <body>
@@ -333,7 +317,7 @@
       <input type="number" id="starBalloonInput" class="star-balloon-input" min="1" max="100000" value="1" />
       <button id="starBalloonBtn" class="star-balloon-btn" disabled>⭐ 보내기</button>
     </div>
-    <button id="fanMembershipBtn" class="fan-membership-btn" disabled>💜 팬 가입</button> </div>
+  </div>
   
   <div class="section-container">
     <h3>💬 채팅</h3>
@@ -356,8 +340,10 @@
 
   <script>
     const viewerId = Math.random().toString(36).substr(2, 9); // 고유한 수신자 ID
-    // const ws = new WebSocket("ws://192.168.0.238:8080");
-    const ws = new WebSocket("ws://localhost:8080");
+    // const ws = new WebSocket("ws://192.168.0.71:8080");
+    const ws = new WebSocket("ws://192.168.0.238:8080");
+    // const serverIP = window.location.hostname || '112.221.66.174'; // 현재 페이지의 호스트 또는 기본값
+    // const ws = new WebSocket(`ws://${serverIP}:8080`);
     const remoteVideo = document.getElementById("remoteVideo");
     const chatInput = document.getElementById("chatInput");
     const chatLog = document.getElementById("chatLog");
@@ -373,19 +359,16 @@
     const displayRoomId = document.getElementById("displayRoomId");
     const activeViewersList = document.getElementById("activeViewers");
     const viewerCountDisplay = document.getElementById("viewerCount");
-    const fanMembershipBtn = document.getElementById("fanMembershipBtn"); // New Fan Membership Button
 
     let pc = null;
     let iceCandidateQueue = [];
     let isWsConnected = false;
     let hasEnteredRoom = false; // 방 입장 여부
-    let currentNickname = localStorage.getItem('viewerNickname') || "익명"; // Load nickname from localStorage
+    let currentNickname = "익명";
     let currentRoomId = null; // 현재 입장한 방 ID
-    let isFan = localStorage.getItem(`isFan_${viewerId}`) === 'true'; // Load fan status from localStorage
 
     // 초기 닉네임 설정
     nicknameInput.value = currentNickname;
-    updateFanMembershipButtonText(); // Update button text based on initial fan status
 
     // WebSocket 연결 처리
     ws.onopen = () => {
@@ -411,12 +394,15 @@
       updateViewerList([]);
     };
 
-    ws.onerror = (event) => {
-      console.error("🚨 WebSocket 오류:", event);
-      if (event && event.target && event.target.readyState === WebSocket.CLOSED) {
-        console.error("웹소켓이 닫힌 상태에서 오류 발생:", event.target.url);
-      }
-    };
+ws.onerror = (event) => {
+console.error("🚨 WebSocket 오류:", event);
+// 추가 정보 확인을 위해 event.message (일부 브라우저/환경에서 제공) 또는 event.code/event.reason 등을 확인
+if (event && event.target && event.target.readyState === WebSocket.CLOSED) {
+console.error("웹소켓이 닫힌 상태에서 오류 발생:", event.target.url);
+}
+// 연결 실패의 경우 추가적인 네트워크 에러 정보를 확인하기 어려울 수 있음
+// F12 개발자 도구의 Network 탭을 확인하는 것이 가장 중요!
+};
 
     ws.onmessage = async (event) => {
       try {
@@ -426,25 +412,29 @@
         switch (data.type) {
           case "offer":
             if (data.roomId === currentRoomId) { // 현재 방의 offer만 처리
-              await handleOffer(data);
-              appendSystemMessage(`🎥 송신자가 스트리밍을 시작했습니다.`);
+                await handleOffer(data);
+                appendSystemMessage(`🎥 송신자가 스트리밍을 시작했습니다.`);
             } else {
-              console.warn(`다른 방(${data.roomId})의 offer 수신, 무시함.`);
+                console.warn(`다른 방(${data.roomId})의 offer 수신, 무시함.`);
             }
             break;
           case "candidate":
             if (data.roomId === currentRoomId) { // 현재 방의 candidate만 처리
-              await handleCandidate(data);
+                await handleCandidate(data);
             }
             break;
           case "chat":
-            // Pass isFan status to appendChatMessage
-            appendChatMessage(data.from, data.message, data.isFan);
+            appendChatMessage(data.from, data.message);
             break;
           case "like":
+            // 본인이 보낸 좋아요는 이미 로컬에서 처리했으므로, 서버에서 온 것은 무시 (중복 방지)
+            // 아니면 본인이 보낸 메시지임을 확인하고 다른 메시지 처리 로직을 추가할 수도 있습니다.
+            // 여기서는 모든 좋아요 메시지를 처리하도록 유지하여, 로컬 피드백과 별도로 서버로부터의 확인 메시지로 간주합니다.
+            // 더 정교하게 하려면 메시지에 UUID 등을 넣어 중복을 제거할 수 있습니다.
             handleLikeUpdate(data);
             break;
           case "star-balloon":
+            // 본인이 보낸 별풍선은 이미 로컬에서 처리했으므로, 서버에서 온 것은 무시 (중복 방지)
             handleStarBalloon(data);
             break;
           case "nickname-change":
@@ -452,43 +442,34 @@
             break;
           case "sender-available":
             if (data.roomId === currentRoomId) {
-              appendSystemMessage(`✅ 송신자가 방에 접속했습니다. 곧 스트림이 시작됩니다.`);
-              // If sender becomes available, try to initiate connection
-              if (!pc) {
-                // If there's no existing PC, create a new one and send offer
-                // This might be redundant if the server sends an offer directly after sender-available,
-                // but good for robustness if initial offer is missed.
-                // createPeerConnection();
-              }
-            }
-            break;
-          case "sender-unavailable":
-            if (data.roomId === currentRoomId) {
-              appendSystemMessage(`❌ 송신자가 방에서 나갔습니다. 스트림이 종료됩니다.`);
-              updateStatus(`방 "${data.roomId}"에 송신자가 없습니다.`, "status-waiting");
-              if (pc) {
-                pc.close();
-                pc = null;
-              }
-              remoteVideo.srcObject = null;
-              disableInteractionButtons();
+                appendSystemMessage(`✅ 송신자가 방에 접속했습니다. 곧 스트림이 시작됩니다.`);
+                // 송신자가 나갔다가 다시 들어왔을 경우를 대비하여 Offer 재요청 로직이 필요할 수 있습니다.
+                // 현재는 송신자가 들어오면 Offer를 보낸다고 가정합니다.
             }
             break;
           case "no-sender-available":
             if (data.roomId === currentRoomId) {
-              updateStatus(`방 "${data.roomId}"에 송신자가 없습니다.`, "status-waiting");
-              appendSystemMessage(`⚠️ 방 "${data.roomId}"에 송신자가 현재 없습니다. 대기 중...`);
+                updateStatus(`방 "${data.roomId}"에 송신자가 없습니다.`, "status-waiting");
+                appendSystemMessage(`⚠️ 방 "${data.roomId}"에 송신자가 현재 없습니다. 대기 중...`);
+                disableInteractionButtons(); // 송신자 없으면 채팅/액션 비활성화
+            }
+            break;
+          case "sender-disconnected":
+            if (data.roomId === currentRoomId) {
+                updateStatus(`방 "${data.roomId}"의 송신자가 연결을 끊었습니다.`, "status-disconnected");
+                appendSystemMessage(`❌ 송신자가 방을 떠났습니다. 스트림 종료.`);
+                remoteVideo.srcObject = null;
+                disableInteractionButtons();
+                if (pc) {
+                    pc.close();
+                    pc = null;
+                }
             }
             break;
           case "room-members":
-            // data.members now includes nickname and isFan status
-            updateViewerList(data.members, data.senderNickname); // Pass senderNickname as well
-            break;
-          case "fan-status-update": // New: Handle fan status updates from server
-            handleFanStatusUpdate(data);
-            break;
-          case "sender-nickname-change": // New: Handle sender nickname change
-            appendSystemMessage(`📝 송신자가 닉네임을 "${data.newNickname}"으로 변경했습니다.`);
+            if (data.roomId === currentRoomId) {
+                updateViewerList(data.members);
+            }
             break;
           default:
             console.warn("⚠️ 알 수 없는 메시지 타입:", data.type);
@@ -498,347 +479,398 @@
       }
     };
 
-    // WebRTC 관련 함수들 (기존 코드 유지)
-    function createPeerConnection() {
-      // ... (기존 createPeerConnection 함수 내용)
+    // 방 입장 처리
+    enterRoomBtn.addEventListener("click", () => {
+        if (!isWsConnected) {
+            alert("먼저 시그널링 서버에 연결되어야 합니다.");
+            return;
+        }
+        const newRoomId = roomIdInput.value.trim();
+        if (!newRoomId) {
+            alert("입장할 방 ID를 입력해주세요.");
+            return;
+        }
+
+        if (hasEnteredRoom && newRoomId === currentRoomId) {
+            alert(`이미 "${newRoomId}" 방에 입장해 있습니다.`);
+            return;
+        }
+
+        // 기존 방에서 나가는 처리 (선택적으로 구현)
+        if (pc) {
+            pc.close();
+            pc = null;
+            remoteVideo.srcObject = null;
+            console.log("기존 PeerConnection 종료");
+        }
+        
+        currentRoomId = newRoomId;
+        displayRoomId.textContent = currentRoomId;
+        hasEnteredRoom = true;
+        iceCandidateQueue = []; // 방 변경 시 ICE 큐 초기화
+
+        ws.send(JSON.stringify({
+            type: "enterRoom",
+            role: "viewer",
+            viewerId: viewerId,
+            roomId: currentRoomId
+        }));
+        
+        updateStatus(`방 "${currentRoomId}"에 입장 요청 중...`, "status-waiting");
+        appendSystemMessage(`🎉 방 "${currentRoomId}"에 입장했습니다.`);
+        console.log(`✅ 방 입장 요청: ${currentRoomId}`);
+        sendBtn.disabled = false; // 방에 입장하면 채팅 가능
+    });
+
+    // 방 ID 입력창에서 Enter 키
+    roomIdInput.addEventListener("keydown", (e) => {
+        if (e.key === "Enter") {
+            e.preventDefault();
+            enterRoomBtn.click();
+        }
+    });
+
+
+    // Offer 처리
+    async function handleOffer(data) {
+      console.log("📨 Offer 수신");
+      
+      // 기존 PeerConnection이 있다면 정리
       if (pc) {
-        console.log("기존 PeerConnection을 닫고 새로 생성합니다.");
         pc.close();
         pc = null;
+        console.log("기존 PeerConnection 정리 완료.");
       }
+
       pc = new RTCPeerConnection({
         iceServers: [
           { urls: "stun:stun.l.google.com:19302" },
-          { urls: "stun:stun1.l.google.com:19302" },
-        ],
+          { urls: "stun:stun1.l.google.com:19302" }
+        ]
       });
 
-      pc.onicecandidate = (event) => {
-        if (event.candidate) {
-          console.log("ICE candidate 전송:", event.candidate);
-          ws.send(
-            JSON.stringify({
-              type: "candidate",
-              candidate: event.candidate,
-              to: "sender",
-              roomId: currentRoomId,
-            })
-          );
+      pc.ontrack = (event) => {
+        console.log("🎥 미디어 스트림 수신");
+        if (remoteVideo.srcObject !== event.streams[0]) {
+            remoteVideo.srcObject = event.streams[0];
+            updateStatus("영상 스트림 연결됨", "status-connected");
+            enableInteractionButtons(); // 스트림 수신 시 좋아요/별풍선/채팅 활성화
         }
       };
 
-      pc.ontrack = (event) => {
-        console.log("스트림 수신:", event.streams[0]);
-        if (remoteVideo.srcObject !== event.streams[0]) {
-          remoteVideo.srcObject = event.streams[0];
-          remoteVideo.play().catch(error => console.error("비디오 재생 오류:", error));
+      pc.onicecandidate = (event) => {
+        if (event.candidate && hasEnteredRoom && currentRoomId) { // 방에 입장한 상태에서만 전송
+          ws.send(JSON.stringify({
+            type: "candidate",
+            from: viewerId,
+            to: data.from, // offer를 보낸 송신자에게 다시 보냄
+            candidate: event.candidate,
+            roomId: currentRoomId // 방 ID 포함
+          }));
         }
-        updateStatus("🟢 스트림 수신 중", "status-connected");
+      };
+
+      pc.onconnectionstatechange = () => {
+        console.log(`🔗 연결 상태: ${pc.connectionState}`);
+        if (pc.connectionState === "connected") {
+          updateStatus("연결 완료", "status-connected");
+          enableInteractionButtons();
+        } else if (pc.connectionState === "disconnected" || pc.connectionState === "failed" || pc.connectionState === "closed") {
+          updateStatus("스트림 연결이 끊어졌습니다. 송신자 재접속 대기 중...", "status-disconnected");
+          disableInteractionButtons();
+          remoteVideo.srcObject = null;
+          if (pc) {
+            pc.close();
+            pc = null;
+          }
+          appendSystemMessage("스트림 연결이 끊어졌습니다. 송신자 대기 중...");
+        }
       };
 
       pc.oniceconnectionstatechange = () => {
-        console.log("ICE 연결 상태 변경:", pc.iceConnectionState);
-        if (pc.iceConnectionState === "disconnected" || pc.iceConnectionState === "failed" || pc.iceConnectionState === "closed") {
-          appendSystemMessage("스트림 연결이 끊어졌습니다. 송신자 연결을 확인하세요.");
-          updateStatus("🟡 스트림 연결 끊김", "status-waiting");
-          if (remoteVideo.srcObject) {
-            remoteVideo.srcObject.getTracks().forEach(track => track.stop());
-            remoteVideo.srcObject = null;
-          }
-        } else if (pc.iceConnectionState === "connected") {
-          updateStatus("🟢 스트림 연결됨", "status-connected");
-        }
+        console.log(`🧊 ICE 상태: ${pc.iceConnectionState}`);
       };
-      
-      // Data Channel for chat, likes, etc.
+
+      // 데이터 채널 설정 (송신자로부터 열릴 채널을 받음)
       pc.ondatachannel = (event) => {
-          const dataChannel = event.channel;
-          console.log('Data Channel created:', dataChannel.label);
-
-          dataChannel.onmessage = (e) => {
-              const msg = JSON.parse(e.data);
-              console.log('Data Channel Message:', msg);
-              // Handle messages from data channel (e.g., chat, likes if sent this way)
-              if (msg.type === "chat") {
-                appendChatMessage(msg.from, msg.message, msg.isFan);
-              } else if (msg.type === "like") {
-                handleLikeUpdate(msg);
-              } else if (msg.type === "star-balloon") {
-                handleStarBalloon(msg);
-              }
-          };
-
-          dataChannel.onopen = () => console.log('Data Channel opened!');
-          dataChannel.onclose = () => console.log('Data Channel closed!');
-          dataChannel.onerror = (error) => console.error('Data Channel Error:', error);
+        const dataChannel = event.channel;
+        console.log(`✅ 데이터 채널 수신됨: ${dataChannel.label}`);
+        dataChannel.onopen = () => {
+            console.log("데이터 채널 열림 (수신자)");
+            // dataChannel.send("Hello from viewer!"); // 테스트 메시지
+        };
+        dataChannel.onmessage = (e) => {
+            console.log("데이터 채널 메시지 수신:", e.data);
+            // 이곳에서 데이터 채널 메시지를 처리할 수 있습니다.
+        };
+        dataChannel.onclose = () => console.log("데이터 채널 닫힘 (수신자)");
+        dataChannel.onerror = (error) => console.error("데이터 채널 오류 (수신자):", error);
       };
-    }
 
-    async function handleOffer(data) {
-      if (!pc) {
-        createPeerConnection();
-      }
-      const remoteDesc = new RTCSessionDescription(data.offer);
-      await pc.setRemoteDescription(remoteDesc);
-      const answer = await pc.createAnswer();
-      await pc.setLocalDescription(answer);
-      ws.send(
-        JSON.stringify({
-          type: "answer",
-          answer: pc.localDescription,
-          to: data.from, // send answer back to the sender
-          from: viewerId,
-          roomId: currentRoomId,
-          nickname: currentNickname, // Send nickname with answer
-          isFan: isFan // Send fan status with answer
-        })
-      );
-      // Process queued ICE candidates
-      iceCandidateQueue.forEach(candidate => pc.addIceCandidate(candidate));
-      iceCandidateQueue = [];
-    }
-
-    async function handleCandidate(data) {
-      const candidate = new RTCIceCandidate(data.candidate);
-      if (pc && pc.remoteDescription && pc.remoteDescription.type) {
-        await pc.addIceCandidate(candidate);
-      } else {
-        iceCandidateQueue.push(candidate);
-      }
-    }
-
-    // UI 상태 업데이트 함수
-    function updateStatus(message, className) {
-      status.textContent = message;
-      status.className = "status " + className;
-    }
-
-    function enableInteractionButtons() {
-      sendBtn.disabled = false;
-      likeBtn.disabled = false;
-      starBalloonBtn.disabled = false;
-      fanMembershipBtn.disabled = false; // Enable fan membership button
-    }
-
-    function disableInteractionButtons() {
-      sendBtn.disabled = true;
-      likeBtn.disabled = true;
-      starBalloonBtn.disabled = true;
-      fanMembershipBtn.disabled = true; // Disable fan membership button
-    }
-
-    function appendChatMessage(from, message, isFan = false) { // Add isFan parameter
-      const chatMessageElem = document.createElement("div");
-      chatMessageElem.classList.add("chat-message");
-      let senderText = from;
-      if (isFan) {
-          senderText = `[팬]${from}`; // Prepend [팬] if fan
-          chatMessageElem.classList.add("fan"); // Add class for fan styling
-      }
-      chatMessageElem.innerHTML = `<strong>${senderText}:</strong> ${message}`;
-      chatLog.appendChild(chatMessageElem);
-      chatLog.scrollTop = chatLog.scrollHeight; // 스크롤을 항상 최하단으로
-    }
-
-    function appendSystemMessage(message) {
-      const systemMessageElem = document.createElement("div");
-      systemMessageElem.classList.add("system-message");
-      systemMessageElem.textContent = message;
-      chatLog.appendChild(systemMessageElem);
-      chatLog.scrollTop = chatLog.scrollHeight;
-    }
-
-    function appendEffectMessage(message) {
-      const effectMessageElem = document.createElement("div");
-      effectMessageElem.classList.add("effect-message");
-      effectMessageElem.textContent = message;
-      chatLog.appendChild(effectMessageElem);
-      chatLog.scrollTop = chatLog.scrollHeight;
-    }
-
-    function handleLikeUpdate(data) {
-      appendEffectMessage(`❤️ ${data.from}${data.isFan ? '(팬)' : ''}님이 좋아요를 눌렀습니다!`); // Show fan status
-    }
-
-    function handleStarBalloon(data) {
-      appendEffectMessage(`⭐ ${data.from}${data.isFan ? '(팬)' : ''}님이 별풍선 ${data.count}개를 보냈습니다!`); // Show fan status
-    }
-
-    function handleNicknameChange(data) {
-      const isViewer = data.viewerId === viewerId;
-      const displayNickname = data.isFan ? `[팬]${data.newNickname}` : data.newNickname;
-      if (isViewer) {
-          appendSystemMessage(`📝 닉네임을 "${displayNickname}"로 변경했습니다.`);
-      } else {
-          const oldDisplayNickname = data.isFan ? `[팬]${data.oldNickname}` : data.oldNickname;
-          appendSystemMessage(`📝 ${oldDisplayNickname}님이 닉네임을 "${displayNickname}"로 변경했습니다.`);
-      }
-    }
-
-    function handleFanStatusUpdate(data) { // New function to handle fan status updates from server
-        if (data.viewerId === viewerId) {
-            isFan = data.isFan;
-            localStorage.setItem(`isFan_${viewerId}`, isFan); // Persist fan status
-            updateFanMembershipButtonText();
-            appendSystemMessage(`💜 ${isFan ? '팬 가입이 완료되었습니다!' : '팬 가입이 해제되었습니다.'}`);
-        } else {
-            const statusText = data.isFan ? '팬이 되었습니다!' : '팬 가입을 해제했습니다.';
-            appendSystemMessage(`💜 ${data.nickname}님이 ${statusText}`);
-        }
-        // Update member list to reflect fan status change immediately
-        // This might be redundant if room-members message is also sent by server, but ensures consistency
-        // A better approach might be to just re-call updateViewerList if a full list is sent.
-        // For now, let's rely on broadcastRoomMembers from server to update the list.
-    }
-
-    function updateViewerList(members, senderNickname) { // Add senderNickname parameter
-      activeViewersList.innerHTML = '';
-      viewerCountDisplay.textContent = members.length;
-
-      // Add sender to the list
-      if (senderNickname) {
-        const li = document.createElement("li");
-        li.textContent = `🎥 ${senderNickname} (송신자)`;
-        activeViewersList.appendChild(li);
-      }
-
-      members.forEach(member => {
-          const li = document.createElement("li");
-          let displayName = member.nickname;
-          if (member.isFan) {
-              displayName = `[팬]${member.nickname}`;
-              li.classList.add("fan"); // Add class for fan styling
+      try {
+        await pc.setRemoteDescription(data.sdp);
+        console.log("✅ Remote Description 설정 완료");
+        
+        // 큐에 있던 ICE candidate들 추가
+        for (const candidate of iceCandidateQueue) {
+          try {
+            await pc.addIceCandidate(candidate);
+            console.log("✅ 큐에 있던 ICE Candidate 추가");
+          } catch (e) {
+            console.warn("⚠️ 큐에 있던 ICE Candidate 추가 실패:", e);
           }
-          li.textContent = (member.viewerId === viewerId) ? `${displayName} (나)` : displayName;
-          li.classList.add("viewer-item"); // Add a class for all viewer items
-          activeViewersList.appendChild(li);
-      });
+        }
+        iceCandidateQueue = []; // 큐 비우기
+
+        const answer = await pc.createAnswer();
+        await pc.setLocalDescription(answer);
+
+        ws.send(JSON.stringify({
+          type: "answer",
+          from: viewerId,
+          to: data.from, // answer를 받을 대상은 offer를 보낸 송신자
+          sdp: answer,
+          roomId: currentRoomId // 방 ID 포함
+        }));
+
+        console.log("📤 Answer 전송 완료");
+        updateStatus("연결 설정 중...", "status-waiting");
+      } catch (error) {
+        console.error("❌ Offer 처리 실패:", error);
+        updateStatus("연결 설정 실패", "status-disconnected");
+        disableInteractionButtons();
+      }
     }
 
-    function updateFanMembershipButtonText() { // New function to update button text
-        fanMembershipBtn.textContent = isFan ? '💜 팬 가입 해제' : '💜 팬 가입';
+    // ICE Candidate 처리
+    async function handleCandidate(data) {
+      if (!pc || !pc.remoteDescription || !pc.remoteDescription.type) {
+        console.log("🧊 ICE Candidate 큐에 저장");
+        iceCandidateQueue.push(data.candidate);
+        return;
+      }
+
+      try {
+        await pc.addIceCandidate(data.candidate);
+        console.log("✅ ICE Candidate 추가");
+      } catch (error) {
+        console.warn("⚠️ ICE Candidate 추가 실패:", error);
+      }
+    }
+
+    // 좋아요 업데이트 처리
+    function handleLikeUpdate(data) {
+      appendSystemMessage(`❤️ 좋아요! (${data.from}님이 눌렀습니다)`);
+    }
+
+    // 별풍선 처리
+    function handleStarBalloon(data) {
+      const effectDiv = document.createElement("div");
+      effectDiv.className = "effect-message";
+      effectDiv.innerHTML = `⭐ ${escapeHtml(data.from)}님이 별풍선 ${data.count}개를 보냈습니다! ⭐`;
+      
+      chatLog.appendChild(effectDiv);
+      chatLog.scrollTop = chatLog.scrollHeight;
+      
+      // 3초 후 일반 메시지로 변경
+      setTimeout(() => {
+        // 원래의 chat-message 스타일로 되돌릴 필요가 있다면 여기에 추가
+        // 현재는 effect-message 클래스를 유지하며 스타일만 변경
+        effectDiv.style.background = "#e9ecef";
+        effectDiv.style.border = "none";
+        effectDiv.style.animation = "none";
+        effectDiv.style.boxShadow = "none";
+        effectDiv.style.color = "#333";
+        effectDiv.style.textAlign = "left";
+      }, 3000);
+    }
+
+    // 닉네임 변경 처리
+    function handleNicknameChange(data) {
+      appendSystemMessage(`📝 ${escapeHtml(data.oldNickname)}님이 닉네임을 "${escapeHtml(data.newNickname)}"로 변경했습니다`);
+    }
+
+    // 채팅 메시지 추가
+    function appendChatMessage(sender, message) {
+      const div = document.createElement("div");
+      div.className = "chat-message";
+      div.innerHTML = `<strong>${escapeHtml(sender)}:</strong> ${escapeHtml(message)}`;
+      chatLog.appendChild(div);
+      chatLog.scrollTop = chatLog.scrollHeight;
+    }
+
+    // 시스템 메시지 추가
+    function appendSystemMessage(message) {
+      const div = document.createElement("div");
+      div.className = "system-message";
+      div.innerHTML = escapeHtml(message);
+      chatLog.appendChild(div);
+      chatLog.scrollTop = chatLog.scrollHeight;
+    }
+
+    // 닉네임 변경
+    function changeNickname() {
+      const newNickname = nicknameInput.value.trim();
+      if (!newNickname) {
+        alert("닉네임을 입력해주세요.");
+        return;
+      }
+      if (newNickname === currentNickname) {
+        return;
+      }
+
+      const oldNickname = currentNickname;
+      currentNickname = newNickname;
+
+      if (hasEnteredRoom && isWsConnected) {
+        ws.send(JSON.stringify({
+          type: "nickname-change",
+          from: viewerId, // 실제 송신자는 viewerId
+          oldNickname: oldNickname,
+          newNickname: newNickname,
+          roomId: currentRoomId // 방 ID 포함
+        }));
+      }
+
+      appendSystemMessage(`📝 닉네임을 "${escapeHtml(newNickname)}"로 변경했습니다`);
+    }
+
+    // 좋아요 전송
+    function sendLike() {
+      if (!isWsConnected || !hasEnteredRoom) return;
+
+      ws.send(JSON.stringify({
+        type: "like",
+        from: currentNickname,
+        viewerId: viewerId,
+        roomId: currentRoomId // 방 ID 포함
+      }));
+
+      // 본인 채팅창에 즉시 표시
+      appendSystemMessage(`❤️ 내가 좋아요를 눌렀습니다!`);
+
+      // 버튼 애니메이션
+      likeBtn.style.transform = "scale(1.2)";
+      setTimeout(() => {
+        likeBtn.style.transform = "scale(1)";
+      }, 200);
+    }
+
+    // 별풍선 전송
+    function sendStarBalloon() {
+      if (!isWsConnected || !hasEnteredRoom) return;
+
+      const count = parseInt(starBalloonInput.value);
+      if (isNaN(count) || count < 1 || count > 100000) {
+        alert("별풍선은 1개부터 100000개까지 보낼 수 있습니다.");
+        return;
+      }
+
+      ws.send(JSON.stringify({
+        type: "star-balloon",
+        from: currentNickname,
+        count: count,
+        viewerId: viewerId,
+        roomId: currentRoomId // 방 ID 포함
+      }));
+
+      // 본인 채팅창에 즉시 표시
+      appendSystemMessage(`⭐ 내가 별풍선 ${count}개를 보냈습니다!`);
+
+      // 버튼 애니메이션
+      starBalloonBtn.style.transform = "scale(1.2)";
+      setTimeout(() => {
+        starBalloonBtn.style.transform = "scale(1)";
+      }, 200);
+    }
+
+    // 채팅 전송
+    function sendChat() {
+      const message = chatInput.value.trim();
+      if (!message || !isWsConnected || !hasEnteredRoom) return;
+
+      ws.send(JSON.stringify({ 
+        type: "chat", 
+        from: currentNickname, // 채팅 보낼 때 닉네임 사용
+        message: message,
+        roomId: currentRoomId // 방 ID 포함
+      }));
+      
+      appendChatMessage("나", message);
+      chatInput.value = "";
+    }
+
+    // 상태 업데이트
+    function updateStatus(message, type) {
+      status.textContent = message;
+      status.className = `status ${type}`;
+    }
+
+    // 상호작용 버튼 활성화
+    function enableInteractionButtons() {
+        sendBtn.disabled = false;
+        likeBtn.disabled = false;
+        starBalloonBtn.disabled = false;
+    }
+
+    // 상호작용 버튼 비활성화
+    function disableInteractionButtons() {
+        sendBtn.disabled = true;
+        likeBtn.disabled = true;
+        starBalloonBtn.disabled = true;
+    }
+
+    // HTML 이스케이프
+    function escapeHtml(text) {
+      const div = document.createElement('div');
+      div.textContent = text;
+      return div.innerHTML;
+    }
+
+    // 접속 중인 뷰어 목록 업데이트
+    function updateViewerList(members) {
+        activeViewersList.innerHTML = '';
+        viewerCountDisplay.textContent = members.length;
+        if (members.length === 0) {
+            const li = document.createElement("li");
+            li.textContent = "아직 접속 중인 시청자가 없습니다.";
+            activeViewersList.appendChild(li);
+        } else {
+            members.forEach(memberId => {
+                const li = document.createElement("li");
+                li.textContent = (memberId === viewerId) ? `${currentNickname} (나)` : memberId; // 내 닉네임 표시
+                activeViewersList.appendChild(li);
+            });
+        }
     }
 
 
     // 이벤트 리스너
-    enterRoomBtn.addEventListener("click", () => {
-      const newRoomId = roomIdInput.value.trim();
-      if (newRoomId && isWsConnected) {
-        currentRoomId = newRoomId;
-        displayRoomId.textContent = currentRoomId;
-        hasEnteredRoom = true;
-        
-        // When entering room, send current nickname and fan status
-        ws.send(JSON.stringify({ 
-          type: "enterRoom", 
-          roomId: currentRoomId, 
-          viewerId: viewerId, 
-          nickname: currentNickname, 
-          isFan: isFan 
-        }));
-        
-        updateStatus(`방 "${currentRoomId}"에 입장. 송신자 대기 중...`, "status-waiting");
-        console.log(`✅ 방 입장: ${currentRoomId}`);
-        enableInteractionButtons();
-        appendSystemMessage(`방 "${currentRoomId}"에 입장했습니다.`);
-      } else {
-        alert("유효한 방 ID를 입력하고 WebSocket이 연결되어 있어야 합니다.");
-      }
-    });
-
-    roomIdInput.addEventListener("keydown", (e) => {
-      if (e.key === "Enter") {
-        e.preventDefault();
-        enterRoomBtn.click();
-      }
-    });
-
-    changeNicknameBtn.addEventListener("click", () => {
-      const newNickname = nicknameInput.value.trim();
-      if (newNickname && newNickname !== currentNickname) {
-        const oldNickname = currentNickname;
-        currentNickname = newNickname;
-        localStorage.setItem('viewerNickname', currentNickname); // Persist nickname
-        // Send nickname change to server
-        ws.send(JSON.stringify({
-          type: "nickname-change",
-          viewerId: viewerId,
-          oldNickname: oldNickname,
-          newNickname: newNickname,
-          roomId: currentRoomId
-        }));
-      } else if (!newNickname) {
-        alert("닉네임을 입력해주세요.");
-      }
-    });
-
+    changeNicknameBtn.addEventListener("click", changeNickname);
     nicknameInput.addEventListener("keydown", (e) => {
       if (e.key === "Enter") {
         e.preventDefault();
-        changeNicknameBtn.click();
+        changeNickname();
       }
     });
 
-    likeBtn.addEventListener("click", () => {
-      if (hasEnteredRoom) {
-        ws.send(JSON.stringify({ type: "like", roomId: currentRoomId, from: currentNickname, fromId: viewerId, isFan: isFan }));
-        // Local feedback for immediate response
-        handleLikeUpdate({ from: currentNickname, fromId: viewerId, isFan: isFan });
-      }
-    });
-
-    starBalloonBtn.addEventListener("click", () => {
-      if (hasEnteredRoom) {
-        const count = parseInt(starBalloonInput.value, 10);
-        if (isNaN(count) || count <= 0) {
-          alert("유효한 별풍선 개수를 입력해주세요.");
-          return;
-        }
-        ws.send(JSON.stringify({ type: "star-balloon", roomId: currentRoomId, count: count, from: currentNickname, fromId: viewerId, isFan: isFan }));
-        // Local feedback for immediate response
-        handleStarBalloon({ from: currentNickname, count: count, fromId: viewerId, isFan: isFan });
-      }
-    });
+    likeBtn.addEventListener("click", sendLike);
+    starBalloonBtn.addEventListener("click", sendStarBalloon);
     
     starBalloonInput.addEventListener("keydown", (e) => {
       if (e.key === "Enter") {
         e.preventDefault();
-        starBalloonBtn.click();
+        sendStarBalloon();
       }
     });
 
-    sendBtn.addEventListener("click", () => {
-      if (hasEnteredRoom) {
-        const message = chatInput.value.trim();
-        if (message) {
-          ws.send(JSON.stringify({ type: "chat", message: message, roomId: currentRoomId, from: currentNickname, fromId: viewerId, isFan: isFan }));
-          // Local echo for immediate feedback
-          // appendChatMessage(currentNickname, message, isFan);
-          chatInput.value = "";
-        }
-      }
-    });
-
+    sendBtn.addEventListener("click", sendChat);
     chatInput.addEventListener("keydown", (e) => {
       if (e.key === "Enter") {
         e.preventDefault();
-        sendBtn.click();
+        sendChat();
       }
     });
-
-    fanMembershipBtn.addEventListener("click", () => { // New event listener for fan membership button
-      if (hasEnteredRoom) {
-          isFan = !isFan; // Toggle fan status
-          localStorage.setItem(`isFan_${viewerId}`, isFan); // Persist fan status
-          ws.send(JSON.stringify({ type: "fan-membership", roomId: currentRoomId, viewerId: viewerId, isFan: isFan }));
-          updateFanMembershipButtonText(); // Update button text immediately
-          // Local feedback
-          appendSystemMessage(`💜 팬 가입을 ${isFan ? '요청했습니다.' : '해제 요청했습니다.'}`);
-      } else {
-          alert("먼저 방에 입장해주세요!");
-      }
-    });
-
 
     // 페이지 종료 시 정리
     window.addEventListener("beforeunload", () => {
@@ -849,12 +881,10 @@
     });
 
     // 초기 상태 설정
-    disableInteractionButtons();
-    // if (!currentNickname) { // Only prompt if no nickname is set
-    //   currentNickname = prompt("닉네임을 입력하세요:", "익명") || "익명";
-    //   nicknameInput.value = currentNickname;
-    //   localStorage.setItem('viewerNickname', currentNickname);
-    // }
+    disableInteractionButtons(); // 초기에는 모든 상호작용 버튼 비활성화
+    enterRoomBtn.disabled = true; // WebSocket 연결 전까지 방 입장 버튼 비활성화
+    displayRoomId.textContent = "선택 안됨"; // 초기 방 ID 표시
+    updateViewerList([]); // 초기 뷰어 목록 비우기
   </script>
 </body>
 </html>
